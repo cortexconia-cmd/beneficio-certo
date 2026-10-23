@@ -14,6 +14,9 @@ export const Route = createFileRoute("/")({
     meta: [
       { title: "Projeto+Benefícios — Descubra benefícios em 2026" },
       { name: "description", content: "Catálogo simples e organizado com explicações fáceis sobre benefícios do governo brasileiro." },
+      { property: "og:title", content: "Projeto+Benefícios — Descubra benefícios em 2026" },
+      { property: "og:description", content: "Catálogo simples e organizado com explicações fáceis sobre benefícios do governo brasileiro." },
+      { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Index,

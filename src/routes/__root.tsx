@@ -12,6 +12,7 @@ import {
 import appCss from "../styles.css?url";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { AuthProvider } from "@/hooks/use-auth";
 
 function NotFoundComponent() {
   return (
@@ -119,6 +120,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthProvider>
       <div className="flex min-h-screen flex-col">
         <Header />
         <main className="flex-1">
@@ -126,6 +128,7 @@ function RootComponent() {
         </main>
         <Footer />
       </div>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

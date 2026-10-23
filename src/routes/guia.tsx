@@ -9,6 +9,9 @@ export const Route = createFileRoute("/guia")({
     meta: [
       { title: "Guia 2026 — Projeto+Benefícios" },
       { name: "description", content: "Guia completo sobre benefícios sociais do governo brasileiro em 2026." },
+      { property: "og:title", content: "Guia 2026 — Projeto+Benefícios" },
+      { property: "og:description", content: "Guia completo sobre benefícios sociais do governo brasileiro em 2026." },
+      { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
     ],
   }),
   component: GuideIndex,

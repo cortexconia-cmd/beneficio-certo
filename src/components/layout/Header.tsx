@@ -1,4 +1,4 @@
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Menu, User, LogOut, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -29,6 +29,15 @@ export function Header() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const [logoutError, setLogoutError] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
+  async function handleLogout() {
+    setLogoutError(""); setSigningOut(true);
+    try { await logout(); await navigate({ to: "/", replace: true }); }
+    catch (failure) { setLogoutError(failure instanceof Error ? failure.message : "Não foi possível sair. Tente novamente."); }
+    finally { setSigningOut(false); }
+  }
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/85 backdrop-blur-md">
@@ -84,9 +93,12 @@ export function Header() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
+                  <Link to="/minha-conta">Minha conta</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
                   <Link to="/favoritos">Meus favoritos</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={logout}>
+                <DropdownMenuItem disabled={signingOut} onClick={() => void handleLogout()}>
                   <LogOut className="size-4 mr-2" /> Sair
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -129,6 +141,7 @@ export function Header() {
       </div>
 
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
+      {logoutError && <div role="alert" className="border-t border-border bg-background px-4 py-2 text-sm text-destructive">{logoutError}</div>}
     </header>
   );
 }

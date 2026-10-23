@@ -10,6 +10,9 @@ export const Route = createFileRoute("/favoritos")({
     meta: [
       { title: "Favoritos — Projeto+Benefícios" },
       { name: "description", content: "Seus benefícios salvos para acesso rápido." },
+      { property: "og:title", content: "Favoritos — Projeto+Benefícios" },
+      { property: "og:description", content: "Seus benefícios salvos para acesso rápido." },
+      { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
     ],
   }),
   component: FavoritesPage,

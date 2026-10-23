@@ -14,6 +14,8 @@ import { Route as AtualizacoesRouteImport } from './routes/atualizacoes'
 import { Route as BeneficiosRouteImport } from './routes/beneficios'
 import { Route as FavoritosRouteImport } from './routes/favoritos'
 import { Route as GuiaRouteImport } from './routes/guia'
+import { Route as MinhaContaRouteImport } from './routes/minha-conta'
+import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as BeneficiosSlugRouteImport } from './routes/beneficios.$slug'
 import { Route as GuiaSlugRouteImport } from './routes/guia.$slug'
 
@@ -42,6 +44,16 @@ const GuiaRoute = GuiaRouteImport.update({
   path: '/guia',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MinhaContaRoute = MinhaContaRouteImport.update({
+  id: '/minha-conta',
+  path: '/minha-conta',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
+  id: '/redefinir-senha',
+  path: '/redefinir-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BeneficiosSlugRoute = BeneficiosSlugRouteImport.update({
   id: '/$slug',
   path: '/$slug',
@@ -59,6 +71,8 @@ export interface FileRoutesByFullPath {
   '/beneficios': typeof BeneficiosRouteWithChildren
   '/favoritos': typeof FavoritosRoute
   '/guia': typeof GuiaRouteWithChildren
+  '/minha-conta': typeof MinhaContaRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/beneficios/$slug': typeof BeneficiosSlugRoute
   '/guia/$slug': typeof GuiaSlugRoute
 }
@@ -68,6 +82,8 @@ export interface FileRoutesByTo {
   '/beneficios': typeof BeneficiosRouteWithChildren
   '/favoritos': typeof FavoritosRoute
   '/guia': typeof GuiaRouteWithChildren
+  '/minha-conta': typeof MinhaContaRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/beneficios/$slug': typeof BeneficiosSlugRoute
   '/guia/$slug': typeof GuiaSlugRoute
 }
@@ -78,6 +94,8 @@ export interface FileRoutesById {
   '/beneficios': typeof BeneficiosRouteWithChildren
   '/favoritos': typeof FavoritosRoute
   '/guia': typeof GuiaRouteWithChildren
+  '/minha-conta': typeof MinhaContaRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/beneficios/$slug': typeof BeneficiosSlugRoute
   '/guia/$slug': typeof GuiaSlugRoute
 }
@@ -89,6 +107,8 @@ export interface FileRouteTypes {
     | '/beneficios'
     | '/favoritos'
     | '/guia'
+    | '/minha-conta'
+    | '/redefinir-senha'
     | '/beneficios/$slug'
     | '/guia/$slug'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +118,8 @@ export interface FileRouteTypes {
     | '/beneficios'
     | '/favoritos'
     | '/guia'
+    | '/minha-conta'
+    | '/redefinir-senha'
     | '/beneficios/$slug'
     | '/guia/$slug'
   id:
@@ -107,6 +129,8 @@ export interface FileRouteTypes {
     | '/beneficios'
     | '/favoritos'
     | '/guia'
+    | '/minha-conta'
+    | '/redefinir-senha'
     | '/beneficios/$slug'
     | '/guia/$slug'
   fileRoutesById: FileRoutesById
@@ -117,6 +141,8 @@ export interface RootRouteChildren {
   BeneficiosRoute: typeof BeneficiosRouteWithChildren
   FavoritosRoute: typeof FavoritosRoute
   GuiaRoute: typeof GuiaRouteWithChildren
+  MinhaContaRoute: typeof MinhaContaRoute
+  RedefinirSenhaRoute: typeof RedefinirSenhaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -154,6 +180,20 @@ declare module '@tanstack/react-router' {
       path: '/guia'
       fullPath: '/guia'
       preLoaderRoute: typeof GuiaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/minha-conta': {
+      id: '/minha-conta'
+      path: '/minha-conta'
+      fullPath: '/minha-conta'
+      preLoaderRoute: typeof MinhaContaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/redefinir-senha': {
+      id: '/redefinir-senha'
+      path: '/redefinir-senha'
+      fullPath: '/redefinir-senha'
+      preLoaderRoute: typeof RedefinirSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/beneficios/$slug': {
@@ -201,6 +241,8 @@ const rootRouteChildren: RootRouteChildren = {
   BeneficiosRoute: BeneficiosRouteWithChildren,
   FavoritosRoute: FavoritosRoute,
   GuiaRoute: GuiaRouteWithChildren,
+  MinhaContaRoute: MinhaContaRoute,
+  RedefinirSenhaRoute: RedefinirSenhaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

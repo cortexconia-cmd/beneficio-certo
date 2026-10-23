@@ -1,0 +1,4 @@
+- [x] Verificar conexão e trigger; aplicar migração aditiva única.
+- [ ] Implementar autenticação, Minha Conta e redefinição sem alterar visual.
+- [ ] Testar regras, rotas, tentativa de login e conferir sinais disponíveis.
+- [ ] Informar pendências de configuração e validação real sem criar usuário fake.

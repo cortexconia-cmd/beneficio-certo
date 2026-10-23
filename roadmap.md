@@ -1,4 +1,5 @@
 - [x] Verificar conexão e trigger; aplicar migração aditiva única.
-- [ ] Implementar autenticação, Minha Conta e redefinição sem alterar visual.
-- [ ] Testar regras, rotas, tentativa de login e conferir sinais disponíveis.
-- [ ] Informar pendências de configuração e validação real sem criar usuário fake.
+- [x] Implementar autenticação, Minha Conta e redefinição sem alterar visual.
+- [x] Testar regras, rotas, tentativa de login e conferir sinais disponíveis.
+- [ ] Validar cadastro confirmado, login válido, edição e recuperação reais: bloqueado por ausência de sessão de teste externa; nenhum usuário fake será criado.
+- [ ] Conferir confirmação de e-mail e configurar redirects: depende do painel Auth do Supabase externo; sem ferramenta de configuração disponível.

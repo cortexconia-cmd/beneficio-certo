@@ -49,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
+    const recoveryLink = new URLSearchParams(window.location.hash.slice(1));
+    const requestedRecovery = window.location.pathname === "/redefinir-senha" && recoveryLink.get("type") === "recovery" && !recoveryLink.has("error");
     const apply = (next: Session | null) => {
       const current = ++version.current;
       setSession(next);
@@ -72,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     };
     const subscription = supabase.auth.onAuthStateChange((event, next) => {
-      if (event === "PASSWORD_RECOVERY") {
+      if (event === "PASSWORD_RECOVERY" && requestedRecovery && next) {
         recovery.current = true;
         setRecoveryReady(true);
       }
@@ -145,7 +147,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     version.current++;
     setSession(null);
     setProfile(null);
-    window.history.replaceState(null, "", window.location.href);
   });
   const user = session ? { id: session.user.id, name: profile?.full_name || session.user.email?.split("@")[0] || "Minha conta", email: session.user.email || "", whatsapp: profile?.whatsapp || "" } : null;
   return <AuthContext.Provider value={{ user, session, profile, loading, error, recoveryReady, login, signup, resetPassword, updatePassword, updateProfile, logout }}>{children}</AuthContext.Provider>;

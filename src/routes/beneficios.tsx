@@ -9,8 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 interface Search {
-  q: string;
-  category: string;
+  q?: string;
+  category?: string;
 }
 
 export const Route = createFileRoute("/beneficios")({

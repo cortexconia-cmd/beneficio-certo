@@ -1,0 +1,8 @@
+[
+ {"capability":"code","source":"TanStack Start app (pages, components, data)","outcome":"migrate","status":"verified","next_action":"none"},
+ {"capability":"schema","source":"none (backend client present but unused, no tables)","outcome":"not_applicable","status":"verified","next_action":"none"},
+ {"capability":"records","source":"static content in src/data","outcome":"migrate","status":"verified","next_action":"none"},
+ {"capability":"auth","source":"demo sign-in stored in browser only","outcome":"preserve_demo","status":"verified","next_action":"optional: add real accounts with Lovable Cloud"},
+ {"capability":"favorites","source":"browser storage","outcome":"preserve","status":"verified","next_action":"none"},
+ {"capability":"secrets","source":"none","outcome":"not_applicable","status":"verified","next_action":"none"}
+]

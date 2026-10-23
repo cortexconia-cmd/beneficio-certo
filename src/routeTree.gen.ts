@@ -10,33 +10,113 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AtualizacoesRouteImport } from './routes/atualizacoes'
+import { Route as BeneficiosRouteImport } from './routes/beneficios'
+import { Route as FavoritosRouteImport } from './routes/favoritos'
+import { Route as GuiaRouteImport } from './routes/guia'
+import { Route as BeneficiosSlugRouteImport } from './routes/beneficios.$slug'
+import { Route as GuiaSlugRouteImport } from './routes/guia.$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AtualizacoesRoute = AtualizacoesRouteImport.update({
+  id: '/atualizacoes',
+  path: '/atualizacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BeneficiosRoute = BeneficiosRouteImport.update({
+  id: '/beneficios',
+  path: '/beneficios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FavoritosRoute = FavoritosRouteImport.update({
+  id: '/favoritos',
+  path: '/favoritos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuiaRoute = GuiaRouteImport.update({
+  id: '/guia',
+  path: '/guia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BeneficiosSlugRoute = BeneficiosSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => BeneficiosRoute,
+} as any)
+const GuiaSlugRoute = GuiaSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => GuiaRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/atualizacoes': typeof AtualizacoesRoute
+  '/beneficios': typeof BeneficiosRouteWithChildren
+  '/favoritos': typeof FavoritosRoute
+  '/guia': typeof GuiaRouteWithChildren
+  '/beneficios/$slug': typeof BeneficiosSlugRoute
+  '/guia/$slug': typeof GuiaSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/atualizacoes': typeof AtualizacoesRoute
+  '/beneficios': typeof BeneficiosRouteWithChildren
+  '/favoritos': typeof FavoritosRoute
+  '/guia': typeof GuiaRouteWithChildren
+  '/beneficios/$slug': typeof BeneficiosSlugRoute
+  '/guia/$slug': typeof GuiaSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/atualizacoes': typeof AtualizacoesRoute
+  '/beneficios': typeof BeneficiosRouteWithChildren
+  '/favoritos': typeof FavoritosRoute
+  '/guia': typeof GuiaRouteWithChildren
+  '/beneficios/$slug': typeof BeneficiosSlugRoute
+  '/guia/$slug': typeof GuiaSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/atualizacoes'
+    | '/beneficios'
+    | '/favoritos'
+    | '/guia'
+    | '/beneficios/$slug'
+    | '/guia/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/atualizacoes'
+    | '/beneficios'
+    | '/favoritos'
+    | '/guia'
+    | '/beneficios/$slug'
+    | '/guia/$slug'
+  id:
+    | '__root__'
+    | '/'
+    | '/atualizacoes'
+    | '/beneficios'
+    | '/favoritos'
+    | '/guia'
+    | '/beneficios/$slug'
+    | '/guia/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AtualizacoesRoute: typeof AtualizacoesRoute
+  BeneficiosRoute: typeof BeneficiosRouteWithChildren
+  FavoritosRoute: typeof FavoritosRoute
+  GuiaRoute: typeof GuiaRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +128,79 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/atualizacoes': {
+      id: '/atualizacoes'
+      path: '/atualizacoes'
+      fullPath: '/atualizacoes'
+      preLoaderRoute: typeof AtualizacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/beneficios': {
+      id: '/beneficios'
+      path: '/beneficios'
+      fullPath: '/beneficios'
+      preLoaderRoute: typeof BeneficiosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/favoritos': {
+      id: '/favoritos'
+      path: '/favoritos'
+      fullPath: '/favoritos'
+      preLoaderRoute: typeof FavoritosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guia': {
+      id: '/guia'
+      path: '/guia'
+      fullPath: '/guia'
+      preLoaderRoute: typeof GuiaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/beneficios/$slug': {
+      id: '/beneficios/$slug'
+      path: '/$slug'
+      fullPath: '/beneficios/$slug'
+      preLoaderRoute: typeof BeneficiosSlugRouteImport
+      parentRoute: typeof BeneficiosRoute
+    }
+    '/guia/$slug': {
+      id: '/guia/$slug'
+      path: '/$slug'
+      fullPath: '/guia/$slug'
+      preLoaderRoute: typeof GuiaSlugRouteImport
+      parentRoute: typeof GuiaRoute
+    }
   }
 }
 
+interface BeneficiosRouteChildren {
+  BeneficiosSlugRoute: typeof BeneficiosSlugRoute
+}
+
+const BeneficiosRouteChildren: BeneficiosRouteChildren = {
+  BeneficiosSlugRoute: BeneficiosSlugRoute,
+}
+
+const BeneficiosRouteWithChildren = BeneficiosRoute._addFileChildren(
+  BeneficiosRouteChildren,
+)
+
+interface GuiaRouteChildren {
+  GuiaSlugRoute: typeof GuiaSlugRoute
+}
+
+const GuiaRouteChildren: GuiaRouteChildren = {
+  GuiaSlugRoute: GuiaSlugRoute,
+}
+
+const GuiaRouteWithChildren = GuiaRoute._addFileChildren(GuiaRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AtualizacoesRoute: AtualizacoesRoute,
+  BeneficiosRoute: BeneficiosRouteWithChildren,
+  FavoritosRoute: FavoritosRoute,
+  GuiaRoute: GuiaRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

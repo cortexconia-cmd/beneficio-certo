@@ -29,7 +29,7 @@ export const Route = createFileRoute("/guia/$slug")({
   errorComponent: ({ error }) => (
     <div className="mx-auto max-w-2xl px-4 py-20 text-center">
       <h1 className="text-2xl font-bold">Erro ao carregar</h1>
-      <p className="mt-2 text-muted-foreground">{error.message}</p>
+      <p className="mt-2 text-muted-foreground">{(error as Error).message}</p>
     </div>
   ),
   component: ChapterPage,

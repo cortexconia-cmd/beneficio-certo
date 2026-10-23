@@ -30,10 +30,10 @@ export const Route = createFileRoute("/beneficios")({
 function BenefitsPage() {
   const { q, category } = Route.useSearch();
   const navigate = useNavigate();
-  const [query, setQuery] = useState(q);
+  const [query, setQuery] = useState(q ?? "");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => setQuery(q), [q]);
+  useEffect(() => setQuery(q ?? ""), [q]);
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 300);
     return () => clearTimeout(t);

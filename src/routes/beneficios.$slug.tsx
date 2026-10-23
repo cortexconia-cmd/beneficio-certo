@@ -19,6 +19,7 @@ export const Route = createFileRoute("/beneficios/$slug")({
           { name: "description", content: loaderData.benefit.shortDescription },
           { property: "og:title", content: loaderData.benefit.name },
           { property: "og:description", content: loaderData.benefit.shortDescription },
+          { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
         ]
       : [],
   }),

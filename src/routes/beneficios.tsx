@@ -22,6 +22,9 @@ export const Route = createFileRoute("/beneficios")({
     meta: [
       { title: "Benefícios — Projeto+Benefícios" },
       { name: "description", content: "Explore todos os benefícios sociais disponíveis. Filtre por categoria e busque pelo nome." },
+      { property: "og:title", content: "Benefícios — Projeto+Benefícios" },
+      { property: "og:description", content: "Explore todos os benefícios sociais disponíveis. Filtre por categoria e busque pelo nome." },
+      { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
     ],
   }),
   component: BenefitsPage,

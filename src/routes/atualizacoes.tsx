@@ -15,6 +15,9 @@ export const Route = createFileRoute("/atualizacoes")({
     meta: [
       { title: "Atualizações — Projeto+Benefícios" },
       { name: "description", content: "Mudanças em benefícios, novas regras, calendário e avisos importantes." },
+      { property: "og:title", content: "Atualizações — Projeto+Benefícios" },
+      { property: "og:description", content: "Mudanças em benefícios, novas regras, calendário e avisos importantes." },
+      { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
     ],
   }),
   component: UpdatesPage,

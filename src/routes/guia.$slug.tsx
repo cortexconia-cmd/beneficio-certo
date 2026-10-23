@@ -17,6 +17,9 @@ export const Route = createFileRoute("/guia/$slug")({
       ? [
           { title: `${loaderData.chapter.title} — Guia 2026` },
           { name: "description", content: loaderData.chapter.summary },
+          { property: "og:title", content: `${loaderData.chapter.title} — Guia 2026` },
+          { property: "og:description", content: loaderData.chapter.summary },
+          { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
         ]
       : [],
   }),

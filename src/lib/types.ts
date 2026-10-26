@@ -5,6 +5,7 @@ export interface Category {
   name: string;
   icon: string; // lucide icon name
   description: string;
+  gradient?: string;
 }
 
 export interface Benefit {

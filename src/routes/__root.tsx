@@ -6,14 +6,12 @@ import {
   useRouter,
   HeadContent,
   Scripts,
-  type ErrorComponentProps,
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
-import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
-import { AuthProvider } from "@/hooks/use-auth";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 
 function NotFoundComponent() {
   return (
@@ -37,7 +35,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: ErrorComponentProps) {
+function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
 
@@ -77,22 +75,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Projeto+Benefícios — Catálogo de benefícios do governo" },
-      { name: "description", content: "Catálogo digital simples e organizado de benefícios sociais do governo brasileiro." },
-      { name: "author", content: "Projeto+Benefícios" },
-      { property: "og:title", content: "Projeto+Benefícios" },
-      { property: "og:description", content: "Descubra benefícios que podem ajudar você e sua família em 2026." },
+      { title: "Projeto + Benefícios — Catálogo de benefícios do governo" },
+      { name: "description", content: "Catálogo digital com explicações simples sobre os principais benefícios do governo brasileiro em 2026." },
+      { name: "author", content: "Projeto + Benefícios" },
+      { property: "og:title", content: "Projeto + Benefícios — Catálogo de benefícios do governo" },
+      { property: "og:description", content: "Catálogo digital com explicações simples sobre os principais benefícios do governo brasileiro em 2026." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Projeto + Benefícios — Catálogo de benefícios do governo" },
+      { name: "twitter:description", content: "Catálogo digital com explicações simples sobre os principais benefícios do governo brasileiro em 2026." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/73cfaa7c-7e6f-4003-b8d4-5fd4246aa4c8/id-preview-513cb661--4d5cd625-824a-4908-b54a-76c6cb0048c0.lovable.app-1779076200926.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/73cfaa7c-7e6f-4003-b8d4-5fd4246aa4c8/id-preview-513cb661--4d5cd625-824a-4908-b54a-76c6cb0048c0.lovable.app-1779076200926.png" },
     ],
     links: [
-      { rel: "stylesheet", href: appCss },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
+        href: appCss,
       },
     ],
   }),
@@ -104,7 +102,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR">
+    <html lang="en">
       <head>
         <HeadContent />
       </head>
@@ -121,16 +119,16 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-      <div className="flex min-h-screen flex-col pb-16 lg:pb-0">
+      <div className="flex min-h-screen flex-col">
         <Header />
-        <main className="flex-1">
+        <main className="flex-1 pb-20 lg:pb-0">
           <Outlet />
         </main>
-        <Footer />
+        <div className="hidden lg:block">
+          <Footer />
+        </div>
         <MobileBottomNav />
       </div>
-      </AuthProvider>
     </QueryClientProvider>
   );
 }

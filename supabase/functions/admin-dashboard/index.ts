@@ -97,7 +97,7 @@ Deno.serve(async req=>{
     if(action==="overview"){
       const {data,error}=await db.rpc("admin_dashboard_stats",{p_since:since});
       if(error)throw error;
-      return reply({data});
+      return reply({data,role:isMaster?"admin_master":"admin"});
     }
     if(action==="acquisition"){
       const {data,error}=await db.rpc("admin_acquisition_report",{p_since:since});

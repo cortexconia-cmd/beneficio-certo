@@ -14,6 +14,12 @@ jobs:
       - run: bun run build
       - run: bunx tsc --noEmit
       - run: bun run test
+      - name: Conferir endereço público publicado
+        run: |
+          curl -sSL --max-time 20 -o /tmp/public-site.html -w 'PUBLIC HTTP %{http_code}\\n' https://beneficio-compass-guide.lovable.app/
+          head -c 800 /tmp/public-site.html
+          echo
+          ! grep -q 'This page didn.t load' /tmp/public-site.html
       - name: Executar SSR local e diagnosticar pagina inicial
         env:
           VITE_SUPABASE_URL: https://kyphgokrlvojxsngoysf.supabase.co
@@ -34,3 +40,4 @@ jobs:
           tail -n 170 /tmp/beneficio-debug.log || true
           test -f /tmp/test-body
           ! grep -q "This page didn't load" /tmp/test-body
+

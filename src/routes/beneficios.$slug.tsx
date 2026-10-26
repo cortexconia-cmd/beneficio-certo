@@ -53,6 +53,9 @@ function BenefitPage() {
   const Icon = (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[benefit.icon] ?? Icons.Sparkles;
   const related = benefits.filter((b) => b.category === benefit.category && b.slug !== benefit.slug).slice(0, 3);
 
+  if (!isFreeBenefit(benefit.slug) && !locked && !checking) {
+    return <div className="mx-auto max-w-3xl px-4 py-16"><h1 className="text-3xl font-bold">{benefit.name}</h1><p className="mt-3 text-muted-foreground">Seu acesso está liberado. O guia detalhado está sendo preparado para publicação.</p><Link to="/beneficios" className="mt-5 inline-block text-primary underline">Voltar ao catálogo</Link></div>;
+  }
   if (locked || checking) return <div className="mx-auto max-w-3xl px-4 py-16 text-center">
     <div className="mx-auto mb-5 flex size-20 items-center justify-center rounded-2xl bg-primary-soft text-primary"><Icons.LockKeyhole className="size-10"/></div>
     <h1 className="text-3xl font-bold">{benefit.name}</h1>

@@ -1,6 +1,6 @@
 // WhatsApp OTP via SolvChat API. Deploy with verify_jwt=true.
 // Secrets (Supabase Edge Functions): SOLVCHAT_TOKEN, SOLVCHAT_OTP_PEPPER.
-// API: POST https://api.solvchat.com.br/api/messages/send.
+// Supply SOLVCHAT_SEND_URL (exact verified API endpoint); no endpoint is assumed.
 import { createClient } from "npm:@supabase/supabase-js@2.57.0";
 const client = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -38,7 +38,12 @@ Deno.serve(async req => {
 
   if (payload.action === "send") {
     const token = Deno.env.get("SOLVCHAT_TOKEN");
-    if (!token) return json({ error: "SolvChat ainda não configurado." }, 503);
+    const endpoint = Deno.env.get("SOLVCHAT_SEND_URL");
+    if (!token || !endpoint) return json({ error: "Endpoint e token do SolvChat ainda não configurados." }, 503);
+    let endpointUrl: URL;
+    try { endpointUrl = new URL(endpoint); }
+    catch { return json({ error: "URL do SolvChat inválida." }, 503); }
+    if (endpointUrl.protocol !== "https:" || !endpointUrl.hostname.includes(".")) return json({ error: "O SolvChat precisa de um endpoint HTTPS válido." }, 503);
     const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
     const hash = await digest(pepper + ":" + userId + ":" + phone + ":" + code);
     const { data: reserved, error: limitError } = await client.rpc("solvchat_reserve_code",
@@ -46,11 +51,11 @@ Deno.serve(async req => {
     if (limitError) return json({ error: "Não foi possível solicitar código." }, 500);
     if (!reserved) return json({ error: "Aguarde antes de solicitar outro código. O limite é de 5 envios por dia." }, 429);
     try {
-      const response = await fetch("https://api.solvchat.com.br/api/messages/send", {
+      const response = await fetch(endpointUrl.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
         body: JSON.stringify({
-          number: phone, openTicket: "0", queueId: "0",
+          number: phone,
           body: "Benefício Certo: seu código de confirmação é " + code +
             ". Ele expira em 5 minutos. Não compartilhe esse código.",
         }),

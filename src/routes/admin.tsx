@@ -62,6 +62,7 @@ function Admin(){
  const refresh=()=>{void cache.invalidateQueries({queryKey:["admin-view"]});void cache.invalidateQueries({queryKey:["admin-check"]})};
  const run=async (action:string,payload:Row)=>{setMessage("");setError("");try{const response=await api<{success:boolean}>(action,payload);if(!response.success)throw new Error("Nenhum registro foi modificado.");setMessage("Alteração salva com registro de auditoria.");refresh();return true}catch(e){setError(e instanceof Error?e.message:"Falha ao salvar.");return false}};
  const headline=nav.find(x=>x.id===section)?.label;
+ const result:Row=data.data??{};
  if(authLoading)return <div className="mx-auto max-w-6xl px-4 py-24 text-center">Verificando sessão…</div>;
  if(!user)return <main className="mx-auto max-w-lg px-4 py-20 text-center"><Icons.ShieldCheck className="mx-auto size-14 text-primary"/><h1 className="mt-4 text-3xl font-bold">Área administrativa</h1><p className="mt-3 text-muted-foreground">Entre com sua conta de administrador para acessar o painel.</p><Button className="mt-5" onClick={()=>setLoginOpen(true)}>Entrar</Button><LoginDialog open={loginOpen} onOpenChange={setLoginOpen}/></main>;
  if(authorized.isPending)return <div className="mx-auto max-w-6xl px-4 py-24 text-center" role="status">Validando permissões administrativas…</div>;
@@ -75,13 +76,13 @@ function Admin(){
     {message&&<div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{message}</div>}
     {error&&<div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">{error}</div>}
     {data.isPending?<p className="py-16 text-center text-muted-foreground" role="status">Carregando dados reais do Supabase…</p>:data.isError?<div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-5">Erro na consulta: {data.error.message}<Button className="ml-3" size="sm" onClick={refresh}>Tentar novamente</Button></div>:
-    section==="visao"?<Overview obj={data.data as Dashboard}/>:
-    section==="aquisicao"?<Acquisition rows={data.data}/>:
-    section==="usuarios"?<Users rows={isArray(data.rows)?data.rows:[]} grants={data.grants} verified={data.verified} orders={data.orders} search={search} setSearch={setSearch} page={page} setPage={setPage} total={toNum(data.total)} run={run}/>:
-    section==="pedidos"?<Orders rows={data.rows} profiles={data.profiles} search={search} setSearch={setSearch} page={page} setPage={setPage} total={toNum(data.total)}/>:
-    section==="conteudos"?<Benefits rows={data.data} run={run}/>:
-    section==="preco"?<Settings data={data.data} run={run}/>:
-    <Audit rows={data.rows} page={page} total={toNum(data.total)} setPage={setPage}/>}
+    section==="visao"?<Overview obj={result.data as Dashboard}/>:
+    section==="aquisicao"?<Acquisition rows={result.data}/>:
+    section==="usuarios"?<Users rows={isArray(result.rows)?result.rows:[]} grants={result.grants} verified={result.verified} orders={result.orders} search={search} setSearch={setSearch} page={page} setPage={setPage} total={toNum(result.total)} run={run}/>:
+    section==="pedidos"?<Orders rows={result.rows} profiles={result.profiles} search={search} setSearch={setSearch} page={page} setPage={setPage} total={toNum(result.total)}/>:
+    section==="conteudos"?<Benefits rows={result.data} run={run}/>:
+    section==="preco"?<Settings data={result.data} run={run}/>:
+    <Audit rows={result.rows} page={page} total={toNum(result.total)} setPage={setPage}/>}
    </main>
  </div>;
 }

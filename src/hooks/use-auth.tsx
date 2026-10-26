@@ -28,7 +28,10 @@ interface AuthState {
   loading: boolean;
   error: string | null;
   recoveryReady: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  phoneVerified: boolean;
+  sendPhoneCode: (number?: string) => Promise<void>;
+  verifyPhoneCode: (number: string, code: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, whatsapp: string, email: string, password: string) => Promise<boolean>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
@@ -43,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recoveryReady, setRecoveryReady] = useState(false);
+  const [verifiedWhatsApp, setVerifiedWhatsApp] = useState(false);
   const version = useRef(0);
   const profileReady = useRef<Promise<void>>(Promise.resolve());
   const recovery = useRef(false);
@@ -55,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const current = ++version.current;
       setSession(next);
       setProfile(null);
+      setVerifiedWhatsApp(false);
       setLoading(true);
       // Start profile I/O outside the synchronous Auth callback to avoid auth-lock races.
       profileReady.current = Promise.resolve().then(async () => {
@@ -64,6 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (result.error) throw result.error;
           if (alive && version.current === current) {
             setProfile(result.data);
+            const status = await supabase.functions.invoke("solvchat-otp", { body: { action: "status" } });
+            if (alive && version.current === current) setVerifiedWhatsApp(!status.error && status.data?.verified === true);
             setError(result.data ? null : "Seu perfil não foi encontrado. Não é possível editar seus dados.");
           }
         } catch {
@@ -104,17 +111,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(message);
     } finally { setLoading(false); }
   }
+  const sendPhoneCode: AuthState["sendPhoneCode"] = () => perform(async () => {
+    const result = await supabase.functions.invoke("solvchat-otp", { body: { action: "send" } });
+    if (result.error || !result.data?.sent) throw new Error(result.data?.error ?? "Não foi possível enviar o código pelo WhatsApp.");
+  });
+  const verifyPhoneCode: AuthState["verifyPhoneCode"] = (_number, code) => perform(async () => {
+    if (!/^\d{6}$/.test(code.trim())) throw new Error("Informe o código de 6 dígitos.");
+    const result = await supabase.functions.invoke("solvchat-otp", { body: { action: "verify", code: code.trim() } });
+    if (result.error || result.data?.verified !== true) throw new Error(result.data?.error ?? "Código inválido ou expirado.");
+    setVerifiedWhatsApp(true);
+  });
   const login: AuthState["login"] = (email, password) => perform(async () => {
     const result = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (result.error) throw new Error("Não foi possível entrar. Verifique e-mail, senha e confirmação do e-mail.");
+    if (result.error) throw new Error("Não foi possível entrar. Verifique seu e-mail e senha.");
     await profileReady.current;
+    const check = await supabase.functions.invoke("solvchat-otp", { body: { action: "status" } });
+    const verified = !check.error && check.data?.verified === true;
+    setVerifiedWhatsApp(verified);
+    return verified;
   });
   const signup: AuthState["signup"] = (name, whatsapp, email, password) => perform(async () => {
     if (!name.trim()) throw new Error("Informe seu nome completo.");
     validatePassword(password);
-    const result = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim(), whatsapp: normalizeWhatsapp(whatsapp) }, emailRedirectTo: `${window.location.origin}/minha-conta` } });
-    if (result.error) throw new Error("Não foi possível cadastrar. Verifique seus dados e tente novamente.");
-    return result.data.session === null;
+    const phone = normalizeWhatsapp(whatsapp);
+    const result = await supabase.auth.signUp({
+      email: email.trim(), password,
+      options: { data: { full_name: name.trim(), whatsapp: phone } },
+    });
+    if (result.error) throw new Error("Não foi possível cadastrar. Verifique seus dados.");
+    if (!result.data.session) throw new Error("O Supabase ainda exige confirmação de e-mail. Para verificar pelo WhatsApp, configure Authentication > Providers > Email para não exigir confirmação.");
+    // Trigger on auth.users creates the profile; wait until it becomes visible.
+    const { data: profileAfterSignup, error: profileError } = await supabase.from("profiles")
+      .select("id").eq("id", result.data.user?.id ?? "").maybeSingle();
+    if (profileError || !profileAfterSignup) throw new Error("Conta criada, mas o perfil ainda não está disponível. Faça login novamente.");
+    const sent = await supabase.functions.invoke("solvchat-otp", { body: { action: "send" } });
+    if (sent.error || !sent.data?.sent) throw new Error(sent.data?.error ?? "Conta criada, mas não foi possível enviar a mensagem pelo SolvChat.");
+    return true;
   });
   const resetPassword: AuthState["resetPassword"] = (email) => perform(async () => {
     const result = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/redefinir-senha` });
@@ -147,9 +179,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     version.current++;
     setSession(null);
     setProfile(null);
+    setVerifiedWhatsApp(false);
   });
+  const phoneVerified = Boolean(session && verifiedWhatsApp);
   const user = session ? { id: session.user.id, name: profile?.full_name || session.user.email?.split("@")[0] || "Minha conta", email: session.user.email || "", whatsapp: profile?.whatsapp || "" } : null;
-  return <AuthContext.Provider value={{ user, session, profile, loading, error, recoveryReady, login, signup, resetPassword, updatePassword, updateProfile, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, session, profile, loading, error, recoveryReady, phoneVerified, sendPhoneCode, verifyPhoneCode, login, signup, resetPassword, updatePassword, updateProfile, logout }}>{children}</AuthContext.Provider>;
 }
 export function useAuth() {
   const context = useContext(AuthContext);

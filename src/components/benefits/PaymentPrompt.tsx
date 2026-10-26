@@ -7,12 +7,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
 export function PaymentPrompt({ open, onOpenChange, benefitName }: { open: boolean; onOpenChange: (open: boolean) => void; benefitName?: string }) {
-  const { user } = useAuth();
+  const { user, phoneVerified } = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   async function checkout() {
-    if (!user) { onOpenChange(false); setLoginOpen(true); return; }
+    if (!user || !phoneVerified) { onOpenChange(false); setLoginOpen(true); return; }
     setPending(true); setError("");
     try {
       const { data, error: failure } = await supabase.functions.invoke("asaas-create-checkout", { body: {} });
@@ -39,10 +39,10 @@ export function PaymentPrompt({ open, onOpenChange, benefitName }: { open: boole
           <p className="text-xs text-muted-foreground">Somos uma plataforma privada de orientações. Os benefícios do governo são gratuitos e podem ser solicitados diretamente pelos canais oficiais.</p>
         </div>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <Button onClick={() => void checkout()} disabled={pending} className="w-full">{pending ? "Preparando pagamento…" : user ? "Desbloquear conteúdo" : "Cadastre-se para desbloquear"}</Button>
+        <Button onClick={() => void checkout()} disabled={pending} className="w-full">{pending ? "Preparando pagamento…" : user ? (phoneVerified ? "Desbloquear conteúdo" : "Confirmar celular para continuar") : "Cadastre-se para desbloquear"}</Button>
         <Button variant="ghost" onClick={() => onOpenChange(false)}>Agora não</Button>
       </DialogContent>
     </Dialog>
-    <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
+    <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} initialMode={user ? "verificar" : "cadastrar"} />
   </>;
 }

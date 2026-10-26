@@ -12,6 +12,7 @@ import {
 import appCss from "../styles.css?url";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { AuthProvider } from "@/hooks/use-auth";
 
 function NotFoundComponent() {
@@ -103,7 +104,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <head>
         <HeadContent />
       </head>
@@ -121,12 +122,13 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-screen flex-col pb-16 lg:pb-0">
         <Header />
         <main className="flex-1">
           <Outlet />
         </main>
         <Footer />
+        <MobileBottomNav />
       </div>
       </AuthProvider>
     </QueryClientProvider>

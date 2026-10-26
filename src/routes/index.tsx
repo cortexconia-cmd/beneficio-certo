@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { CategoryCard } from "@/components/CategoryCard";
 import { BenefitCard } from "@/components/BenefitCard";
 import { categories } from "@/data/categories";
-import { benefits } from "@/data/benefits";
+import { useLiveBenefits } from "@/hooks/use-live-benefits";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -27,6 +27,7 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
+  const { benefits } = useLiveBenefits();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const destaques = benefits.filter((b) => b.destaque).slice(0, 6);

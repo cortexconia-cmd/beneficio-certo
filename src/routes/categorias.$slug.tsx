@@ -26,7 +26,7 @@ export const Route = createFileRoute("/categorias/$slug")({
     </div>
   ),
   errorComponent: ({ error }) => (
-    <div className="mx-auto max-w-3xl px-4 py-20 text-center text-muted-foreground">{error.message}</div>
+    <div className="mx-auto max-w-3xl px-4 py-20 text-center text-muted-foreground">{(error as Error).message}</div>
   ),
   component: CategoryPage,
 });

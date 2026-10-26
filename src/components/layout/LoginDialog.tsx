@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Dialog,
@@ -16,11 +17,12 @@ import { Eye, EyeOff } from "lucide-react";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialMode?: "entrar" | "cadastrar" | "recuperar" | "verificar";
 }
 
-export function LoginDialog({ open, onOpenChange }: Props) {
-  const { login, signup, resetPassword, sendPhoneCode, verifyPhoneCode, phoneVerified, loading } = useAuth();
-  const [mode, setMode] = useState<"entrar" | "cadastrar" | "recuperar" | "verificar">("entrar");
+export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Props) {
+  const { login, signup, resetPassword, sendPhoneCode, verifyPhoneCode, loading } = useAuth();
+  const [mode, setMode] = useState<"entrar" | "cadastrar" | "recuperar" | "verificar">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
@@ -29,6 +31,7 @@ export function LoginDialog({ open, onOpenChange }: Props) {
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  useEffect(() => { if (open) setMode(initialMode); }, [open, initialMode]);
   function changeMode(next: typeof mode) { setMode(next); setError(""); setSuccess(""); setPassword(""); }
 
   return (
@@ -46,7 +49,7 @@ export function LoginDialog({ open, onOpenChange }: Props) {
             if (loading) return;
             setError(""); setSuccess("");
             try {
-              if (mode === "entrar") { await login(email, password); setPassword(""); if (!phoneVerified) setMode("verificar"); else onOpenChange(false); }
+              if (mode === "entrar") { await login(email, password); setPassword(""); const verified = await supabase.auth.getUser(); if (!verified.data.user?.phone_confirmed_at) setMode("verificar"); else onOpenChange(false); }
               else if (mode === "cadastrar") {
                 const confirm = await signup(name, whatsapp, email, password);
                 setPassword("");
@@ -91,7 +94,7 @@ export function LoginDialog({ open, onOpenChange }: Props) {
           </div>}
           {mode === "verificar" && <>
             <div className="space-y-2"><Label htmlFor="sms-phone">Número do celular com DDD</Label><Input id="sms-phone" type="tel" required value={whatsapp} autoComplete="tel" onChange={e => setWhatsapp(e.target.value)} placeholder="(11) 99999-9999" /></div>
-            <div className="space-y-2"><Label htmlFor="sms-code">Código recebido por SMS</Label><Input id="sms-code" required inputMode="numeric" autoComplete="one-time-code" maxLength={8} pattern="[0-9]{6,8}" value={code} onChange={e => setCode(e.target.value.replace(/\\D/g, ""))} placeholder="000000" /></div>
+            <div className="space-y-2"><Label htmlFor="sms-code">Código recebido por SMS</Label><Input id="sms-code" required inputMode="numeric" autoComplete="one-time-code" maxLength={8} pattern="[0-9]{6,8}" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" /></div>
             <Button type="button" variant="outline" className="w-full" disabled={loading} onClick={async () => { setError(""); setSuccess(""); try { await sendPhoneCode(whatsapp); setSuccess("Novo código SMS solicitado."); } catch (e) { setError(e instanceof Error ? e.message : "Falha ao reenviar SMS."); } }}>Reenviar código SMS</Button>
           </>}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

@@ -1,16 +1,60 @@
 import type { Category } from "@/lib/types";
-
 export const categories: Category[] = [
-  { id: "familia", name: "Família", icon: "Users", description: "Apoio para famílias em situação de vulnerabilidade" },
-  { id: "maternidade", name: "Maternidade", icon: "Baby", description: "Benefícios para gestantes e mães" },
-  { id: "moradia", name: "Moradia", icon: "Home", description: "Programas habitacionais e auxílio moradia" },
-  { id: "educacao", name: "Educação", icon: "GraduationCap", description: "Bolsas e incentivos educacionais" },
-  { id: "trabalhador", name: "Trabalhador", icon: "Briefcase", description: "Direitos e auxílios trabalhistas" },
-  { id: "idosos", name: "Idosos", icon: "HeartHandshake", description: "Benefícios para pessoas idosas" },
-  { id: "saude", name: "Saúde", icon: "Stethoscope", description: "Programas e auxílios de saúde" },
-  { id: "cadastro-social", name: "Cadastro Social", icon: "FileText", description: "Cadastros e documentos sociais" },
+  {
+    "id": "transferencia-renda",
+    "name": "Transferência de Renda",
+    "description": "Benefícios diretos para famílias e pessoas com baixa renda",
+    "icon": "Wallet",
+    "gradient": "from-blue-500 to-indigo-600"
+  },
+  {
+    "id": "educacao",
+    "name": "Educação",
+    "description": "Apoio ao estudo, isenções e permanência escolar",
+    "icon": "GraduationCap",
+    "gradient": "from-violet-500 to-purple-600"
+  },
+  {
+    "id": "energia-agua-comunicacao",
+    "name": "Energia, Água e Comunicação",
+    "description": "Tarifas sociais de luz, água, TV e internet",
+    "icon": "Zap",
+    "gradient": "from-amber-500 to-orange-600"
+  },
+  {
+    "id": "habitacao",
+    "name": "Habitação e Reforma Agrária",
+    "description": "Casa própria, terra e urbanização",
+    "icon": "Home",
+    "gradient": "from-emerald-500 to-teal-600"
+  },
+  {
+    "id": "agricultura",
+    "name": "Agricultura e Segurança Alimentar",
+    "description": "Apoio à produção rural e combate à fome",
+    "icon": "Sprout",
+    "gradient": "from-lime-500 to-green-600"
+  },
+  {
+    "id": "saude-inclusao",
+    "name": "Saúde e Inclusão Social",
+    "description": "Remédios, mobilidade e direitos sociais",
+    "icon": "HeartPulse",
+    "gradient": "from-red-500 to-pink-600"
+  },
+  {
+    "id": "isencoes",
+    "name": "Direitos Financeiros e Isenções",
+    "description": "Isenções de taxas e descontos em serviços públicos",
+    "icon": "BadgePercent",
+    "gradient": "from-cyan-500 to-blue-600"
+  },
+  {
+    "id": "complementares",
+    "name": "Complementares",
+    "description": "Direitos explicados no guia e acúmulo de benefícios",
+    "icon": "BookOpen",
+    "gradient": "from-slate-600 to-slate-800"
+  }
 ];
-
-export function getCategory(id: string) {
-  return categories.find((c) => c.id === id);
-}
+export const getCategory = (id: string) => categories.find((c) => c.id === id);

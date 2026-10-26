@@ -110,13 +110,14 @@ Deno.serve(async req=>{
       const people=await paged("profiles","id,full_name,email,whatsapp,created_at",page,search);
       const ids=(people.rows as {id:string}[]).map(x=>x.id);
       if(!ids.length)return reply({...people,grants:[],orders:[],verified:[]});
-      const [grants,orders,verified]=await Promise.all([
+      const [grants,orders,verified,staff]=await Promise.all([
         db.from("access_grants").select("user_id,access_scope,starts_at,expires_at,revoked_at,order_id").in("user_id",ids),
         db.from("orders").select("user_id,status,amount_cents,created_at").in("user_id",ids).order("created_at",{ascending:false}).limit(300),
-        db.from("phone_verifications").select("user_id,verified_at").in("user_id",ids)
+        db.from("phone_verifications").select("user_id,verified_at").in("user_id",ids),
+        db.from("user_roles").select("user_id,role").in("user_id",ids).in("role",["admin","admin_master"])
       ]);
-      if(grants.error||orders.error||verified.error)throw new Error("Falha ao consultar o status dos usuários");
-      return reply({...people,grants:grants.data,orders:orders.data,verified:verified.data});
+      if(grants.error||orders.error||verified.error||staff.error)throw new Error("Falha ao consultar o status dos usuários");
+      return reply({...people,grants:grants.data,orders:orders.data,verified:verified.data,staff:staff.data});
     }
     if(action==="orders"){
       let query=db.from("orders").select("id,order_number,user_id,amount_cents,status,external_checkout_id,created_at,updated_at",{count:"exact"}).order("created_at",{ascending:false}).range(page*30,page*30+29);

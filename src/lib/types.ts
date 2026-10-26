@@ -1,12 +1,4 @@
-export type CategoryId =
-  | "familia"
-  | "maternidade"
-  | "moradia"
-  | "educacao"
-  | "trabalhador"
-  | "idosos"
-  | "saude"
-  | "cadastro-social";
+export type CategoryId = string;
 
 export interface Category {
   id: CategoryId;

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import * as Icons from "lucide-react";
 import { ArrowLeft, Check, AlertTriangle, Lightbulb, FileText } from "lucide-react";
-import { getBenefit, benefits } from "@/data/benefits";
+import { getBenefit } from "@/data/benefits";
 import { getCategory } from "@/data/categories";
 import type { Benefit } from "@/types/benefit";
 import { FavoriteButton } from "@/components/FavoriteButton";
@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useBenefitAccess } from "@/hooks/use-benefit-access";
 import { PaymentPrompt } from "@/components/benefits/PaymentPrompt";
 import { LockKeyhole } from "lucide-react";
+import { useLiveBenefits } from "@/hooks/use-live-benefits";
 
 export const Route = createFileRoute("/beneficios/$slug")({
   loader: ({ params }) => {
@@ -53,7 +54,9 @@ export const Route = createFileRoute("/beneficios/$slug")({
 });
 
 function BenefitPage() {
-  const { benefit: meta } = Route.useLoaderData() as { benefit: Benefit };
+  const { benefit: originalMeta } = Route.useLoaderData() as { benefit: Benefit };
+  const { benefits: liveBenefits } = useLiveBenefits();
+  const meta = liveBenefits.find(b => b.slug === originalMeta.slug) ?? originalMeta;
   const { user, canOpen, checking } = useBenefitAccess();
   const locked = !canOpen(meta.slug);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -103,7 +106,7 @@ function BenefitPage() {
     ? (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[category.icon] ?? Icons.Circle
     : Icons.Circle;
 
-  const related = benefits
+  const related = liveBenefits
     .filter((b) => b.categoria === benefit.categoria && b.slug !== benefit.slug)
     .slice(0, 3);
 

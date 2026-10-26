@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { getCategory } from "@/data/categories";
-import { getBenefitsByCategory } from "@/data/benefits";
+import { useLiveBenefits } from "@/hooks/use-live-benefits";
 import { BenefitCard } from "@/components/BenefitCard";
 import type { Benefit, Category } from "@/types/benefit";
 
@@ -9,7 +9,7 @@ export const Route = createFileRoute("/categorias/$slug")({
   loader: ({ params }) => {
     const category = getCategory(params.slug);
     if (!category) throw notFound();
-    return { category, benefits: getBenefitsByCategory(params.slug) };
+    return { category };
   },
   head: ({ loaderData }) => ({
     meta: loaderData
@@ -32,10 +32,9 @@ export const Route = createFileRoute("/categorias/$slug")({
 });
 
 function CategoryPage() {
-  const { category, benefits } = Route.useLoaderData() as {
-    category: Category;
-    benefits: Benefit[];
-  };
+  const { category } = Route.useLoaderData() as { category: Category };
+  const { benefits: allBenefits } = useLiveBenefits();
+  const benefits: Benefit[] = allBenefits.filter(b => b.categoria === category.slug);
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-10 md:py-14">
       <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 sm:mb-6 py-1.5">

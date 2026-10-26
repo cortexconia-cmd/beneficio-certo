@@ -31,7 +31,7 @@ interface AuthState {
   phoneVerified: boolean;
   sendPhoneCode: (number?: string) => Promise<void>;
   verifyPhoneCode: (number: string, code: string) => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, whatsapp: string, email: string, password: string) => Promise<boolean>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
@@ -125,6 +125,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     if (result.error) throw new Error("Não foi possível entrar. Verifique seu e-mail e senha.");
     await profileReady.current;
+    const check = await supabase.functions.invoke("solvchat-otp", { body: { action: "status" } });
+    const verified = !check.error && check.data?.verified === true;
+    setVerifiedWhatsApp(verified);
+    return verified;
   });
   const signup: AuthState["signup"] = (name, whatsapp, email, password) => perform(async () => {
     if (!name.trim()) throw new Error("Informe seu nome completo.");

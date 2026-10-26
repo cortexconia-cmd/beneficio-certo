@@ -1,5 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Search, Heart, Home, LayoutGrid, Bell, LifeBuoy, X } from "lucide-react";
+import { Search, Heart, Home, LayoutGrid, Bell, LifeBuoy, X, UserRound } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { LoginDialog } from "@/components/layout/LoginDialog";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -17,6 +19,8 @@ export function Header() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const { user } = useAuth();
   const location = useRouterState({ select: (s) => s.location.pathname });
 
   const submit = (e: React.FormEvent) => {
@@ -76,6 +80,8 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-1 ml-auto">
+          {user ? <Link to="/minha-conta" aria-label="Minha conta" className="inline-flex items-center gap-1 rounded-full border border-primary/20 px-3 py-2 text-sm font-medium text-primary hover:bg-primary-soft"><UserRound className="size-4"/> <span className="hidden sm:inline">Minha conta</span></Link>
+          : <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => setLoginOpen(true)}><UserRound className="mr-1 size-4"/> Entrar</Button>}
           <Sheet open={searchOpen} onOpenChange={setSearchOpen}>
             <SheetTrigger asChild>
               <Button
@@ -117,6 +123,7 @@ export function Header() {
           </Sheet>
         </div>
       </div>
+      <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
     </header>
   );
 }

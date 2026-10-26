@@ -174,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setProfile(null);
   });
-  const phoneVerified = Boolean(session?.user.phone_confirmed_at);
+  const phoneVerified = Boolean(session?.user.phone_confirmed_at && session.user.phone && profile?.whatsapp && session.user.phone === "+" + profile.whatsapp);
   const user = session ? { id: session.user.id, name: profile?.full_name || session.user.email?.split("@")[0] || "Minha conta", email: session.user.email || "", whatsapp: profile?.whatsapp || "" } : null;
   return <AuthContext.Provider value={{ user, session, profile, loading, error, recoveryReady, phoneVerified, sendPhoneCode, verifyPhoneCode, login, signup, resetPassword, updatePassword, updateProfile, logout }}>{children}</AuthContext.Provider>;
 }

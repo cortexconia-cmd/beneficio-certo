@@ -1,5 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import * as Icons from "lucide-react";
+import { useState } from "react";
+import { useBenefitAccess, isFreeBenefit } from "@/hooks/use-benefit-access";
+import { PaymentPrompt } from "@/components/benefits/PaymentPrompt";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { getBenefit, benefits } from "@/data/benefits";
 import { getCategory } from "@/data/categories";
@@ -10,6 +13,8 @@ export const Route = createFileRoute("/beneficios/$slug")({
   loader: ({ params }) => {
     const benefit = getBenefit(params.slug);
     if (!benefit) throw notFound();
+    // Never serialize restricted guide content to anonymous visitors via SSR loader.
+    if (!isFreeBenefit(benefit.slug)) return { benefit: { ...benefit, whatIs: "", whoQualifies: [], value2026: [], howToApply: [], documents: [], important: [] } };
     return { benefit };
   },
   head: ({ loaderData }) => ({
@@ -41,10 +46,24 @@ export const Route = createFileRoute("/beneficios/$slug")({
 
 function BenefitPage() {
   const { benefit } = Route.useLoaderData() as { benefit: import("@/lib/types").Benefit };
+  const { canOpen, checking, user } = useBenefitAccess();
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const locked = !canOpen(benefit.slug);
   const category = getCategory(benefit.category);
   const Icon = (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[benefit.icon] ?? Icons.Sparkles;
   const related = benefits.filter((b) => b.category === benefit.category && b.slug !== benefit.slug).slice(0, 3);
 
+  if (!isFreeBenefit(benefit.slug) && !locked && !checking) {
+    return <div className="mx-auto max-w-3xl px-4 py-16"><h1 className="text-3xl font-bold">{benefit.name}</h1><p className="mt-3 text-muted-foreground">Seu acesso está liberado. O guia detalhado está sendo preparado para publicação.</p><Link to="/beneficios" className="mt-5 inline-block text-primary underline">Voltar ao catálogo</Link></div>;
+  }
+  if (locked || checking) return <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+    <div className="mx-auto mb-5 flex size-20 items-center justify-center rounded-2xl bg-primary-soft text-primary"><Icons.LockKeyhole className="size-10"/></div>
+    <h1 className="text-3xl font-bold">{benefit.name}</h1>
+    <p className="mt-4 text-muted-foreground">{checking ? "Verificando seu acesso…" : "Este guia faz parte da área exclusiva. Consulte as orientações gratuitas pelos canais oficiais do governo."}</p>
+    {!checking && <button className="mt-6 rounded-xl bg-primary px-6 py-3 text-primary-foreground font-semibold" onClick={() => setPaymentOpen(true)}>{user ? "Desbloquear conteúdo" : "Criar conta para desbloquear"}</button>}
+    <div className="mt-4"><Link to="/beneficios" className="text-primary underline">Voltar ao catálogo</Link></div>
+    <PaymentPrompt open={paymentOpen} onOpenChange={setPaymentOpen} benefitName={benefit.name}/>
+  </div>;
   return (
     <div className="animate-[fade-in_0.4s_ease-out]">
       {/* Hero */}

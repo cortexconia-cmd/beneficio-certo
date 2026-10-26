@@ -2,7 +2,7 @@ import { Search, X } from "lucide-react";
 import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { BenefitCard } from "@/components/BenefitCard";
-import { benefits, searchBenefits } from "@/data/benefits";
+import { useLiveBenefits } from "@/hooks/use-live-benefits";
 import { categories } from "@/data/categories";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,11 +29,12 @@ export const Route = createFileRoute("/beneficios")({
 function CatalogPage() {
   const { q, categoria } = Route.useSearch();
   const navigate = Route.useNavigate();
+  const { benefits } = useLiveBenefits();
 
   const filtered = useMemo(() => {
     let list = benefits;
     if (categoria) list = list.filter((b) => b.categoria === categoria);
-    if (q) list = searchBenefits(q).filter((b) => !categoria || b.categoria === categoria);
+    if (q) list = list.filter(b => [b.nome,b.descricaoCurta,b.categoria].some(x => x.toLocaleLowerCase("pt-BR").includes(q.toLocaleLowerCase("pt-BR"))));
     return list;
   }, [q, categoria]);
 

@@ -142,7 +142,7 @@ function Users({rows,grants,staff,verified,orders,search,setSearch,page,setPage,
      <Button disabled={reason.trim().length<8||(decision==="grant"&&manual(selected))||(decision==="revoke"&&!manual(selected))} onClick={async()=>{const ok=await run("manual-access",{userId:selected,decision,reason,expiry:decision==="grant"&&expiry?new Date(expiry+"T23:59:59").toISOString():null});if(ok){setSelected(null);setReason("");setExpiry("")}}}>Salvar como {decision==="grant"?"Premium":"Gratuito"}</Button>
      <p className="text-xs text-muted-foreground">Os acessos manuais são auditados. A verificação de WhatsApp continua obrigatória para contas de clientes.</p>
    </>}
- </section>
+ </section>}
  </div>;
 }
 function Orders({rows,profiles,search,setSearch,page,setPage,total}:{rows:unknown;profiles:unknown;search:string;setSearch:(x:string)=>void;page:number;setPage:(n:number)=>void;total:number}){

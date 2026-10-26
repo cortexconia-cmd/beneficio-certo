@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.0";
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {auth:{persistSession:false,autoRefreshToken:false}});
-const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{"cache-control":"no-store"}});
+const cors={"access-control-allow-origin":"*","access-control-allow-headers":"authorization,apikey,x-client-info,content-type","access-control-allow-methods":"POST, OPTIONS"};
+const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{"cache-control":"no-store",...cors}});
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Params={action?:string;period?:number;page?:number;search?:string;id?:string;status?:string;payload?:Record<string,unknown>;cents?:number;userId?:string;decision?:string;reason?:string;expiry?:string|null;email?:string;staffRole?:string;reason?:string;targetUserId?:string};
 async function paged(table:"profiles"|"orders"|"audit_logs",fields:string,page:number,search:string,orderColumn="created_at"){
@@ -11,6 +12,7 @@ async function paged(table:"profiles"|"orders"|"audit_logs",fields:string,page:n
   if(error)throw error;return {rows:data??[],total:count??0,page};
 }
 Deno.serve(async req=>{
+  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
   if(req.method!=="POST")return reply({error:"Método não permitido"},405);
   const bearer=req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
   if(!bearer)return reply({error:"Autenticação necessária"},401);

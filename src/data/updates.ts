@@ -1,43 +1,56 @@
-import type { Update } from "@/lib/types";
+import type { Update } from "@/types/benefit";
 
 export const updates: Update[] = [
   {
     id: "u1",
-    date: "2026-05-12",
-    type: "calendario",
-    title: "Novo calendário de pagamentos do Bolsa Família",
-    summary: "Calendário de junho a dezembro de 2026 foi publicado pelo governo.",
-    benefitSlug: "bolsa-familia",
+    data: "2026-01-15",
+    tipo: "novidade",
+    titulo: "Pé-de-Meia tem novo valor anual em 2026",
+    resumo:
+      "Estudantes do ensino médio público passam a receber depósito anual reajustado, totalizando até R$ 9.200 ao longo dos três anos.",
+    beneficioSlug: "pe-de-meia",
   },
   {
     id: "u2",
-    date: "2026-05-08",
-    type: "nova-regra",
-    title: "Mudanças nas regras do Auxílio Gás",
-    summary: "Novas regras de elegibilidade entram em vigor a partir do próximo bimestre.",
-    benefitSlug: "auxilio-gas",
+    data: "2026-01-05",
+    tipo: "calendario",
+    titulo: "Calendário Bolsa Família 2026 divulgado",
+    resumo:
+      "Pagamentos seguem o último dígito do NIS. Confira o calendário completo no Caixa Tem.",
+    beneficioSlug: "bolsa-familia",
   },
   {
     id: "u3",
-    date: "2026-04-30",
-    type: "aviso",
-    title: "Atenção a golpes envolvendo benefícios sociais",
-    summary: "Governo alerta sobre tentativas de fraude por mensagens falsas. Use apenas canais oficiais.",
+    data: "2025-12-20",
+    tipo: "mudanca",
+    titulo: "Auxílio Gás continua bimestral em 2026",
+    resumo:
+      "Governo confirma manutenção do pagamento integral do botijão de 13kg a cada dois meses.",
+    beneficioSlug: "auxilio-gas",
   },
   {
     id: "u4",
-    date: "2026-04-22",
-    type: "novo-beneficio",
-    title: "Programa Pé-de-Meia amplia número de beneficiários",
-    summary: "Mais estudantes do ensino médio público passam a ter direito ao programa em 2026.",
-    benefitSlug: "pe-de-meia",
+    data: "2025-12-10",
+    tipo: "alerta",
+    titulo: "Cuidado com golpes envolvendo benefícios",
+    resumo:
+      "Nunca pague taxa para liberar benefício. Todos os programas sociais são 100% gratuitos.",
   },
   {
     id: "u5",
-    date: "2026-04-10",
-    type: "calendario",
-    title: "Cronograma do Salário-Maternidade atualizado",
-    summary: "INSS publica novo cronograma de análise de pedidos.",
-    benefitSlug: "salario-maternidade",
+    data: "2025-11-28",
+    tipo: "mudanca",
+    titulo: "Minha Casa Minha Vida amplia subsídio",
+    resumo:
+      "Famílias da Faixa 1 podem receber subsídio direto de até R$ 55 mil para a compra da casa própria.",
+    beneficioSlug: "minha-casa-minha-vida",
+  },
+  {
+    id: "u6",
+    data: "2025-11-15",
+    tipo: "novidade",
+    titulo: "CadÚnico pode ser atualizado pelo app",
+    resumo:
+      "O aplicativo Meu CadÚnico permite consultar dados e iniciar atualizações sem ir presencialmente ao CRAS.",
   },
 ];

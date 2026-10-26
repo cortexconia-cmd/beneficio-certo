@@ -17,7 +17,7 @@ export function SearchBar({ size = "sm", defaultValue = "", className }: Props) 
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        navigate({ to: "/beneficios", search: { q: value, category: "" } });
+        navigate({ to: "/beneficios", search: { q: value, categoria: "" } });
       }}
       className={cn("relative w-full", className)}
     >

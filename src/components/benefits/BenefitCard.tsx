@@ -28,7 +28,7 @@ export function BenefitCard({ benefit }: Props) {
         {!locked && <FavoriteButton slug={benefit.slug} className="absolute top-3 right-3" />}
         {category && (
           <Badge className="absolute top-3 left-3 bg-white/95 text-foreground hover:bg-white border-0">
-            {category.name}
+            {category.nome}
           </Badge>
         )}
       </div>

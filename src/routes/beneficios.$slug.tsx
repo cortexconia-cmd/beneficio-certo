@@ -1,96 +1,283 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import * as Icons from "lucide-react";
+import { ArrowLeft, Check, AlertTriangle, Lightbulb, FileText } from "lucide-react";
+import { getBenefit, benefits } from "@/data/benefits";
+import { getCategory } from "@/data/categories";
+import type { Benefit } from "@/types/benefit";
+import { FavoriteButton } from "@/components/FavoriteButton";
+import { Badge } from "@/components/ui/badge";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import * as Icons from "lucide-react";
-import { getBenefit } from "@/data/benefits";
-import { getCategory } from "@/data/categories";
-import { isFreeBenefit, useBenefitAccess } from "@/hooks/use-benefit-access";
-import { PaymentPrompt } from "@/components/benefits/PaymentPrompt";
 import { supabase } from "@/integrations/supabase/client";
+import { useBenefitAccess } from "@/hooks/use-benefit-access";
+import { PaymentPrompt } from "@/components/benefits/PaymentPrompt";
+import { LockKeyhole } from "lucide-react";
 
 export const Route = createFileRoute("/beneficios/$slug")({
   loader: ({ params }) => {
-    const benefit = getBenefit(params.slug);
-    if (!benefit) throw notFound();
-    // Public metadata only: never place paid instructions in SSR loader output.
-    return { benefit };
+    const b = getBenefit(params.slug);
+    if (!b) throw notFound();
+    return { benefit: b };
   },
-  head: ({ loaderData }) => ({ meta: loaderData ? [
-    { title: loaderData.benefit.name + " — Projeto + Benefícios" },
-    { name: "description", content: loaderData.benefit.shortDescription },
-  ] : [] }),
+  head: ({ loaderData }) => ({
+    meta: loaderData
+      ? [
+          { title: `${loaderData.benefit.nome} — Projeto + Benefícios` },
+          { name: "description", content: loaderData.benefit.descricaoCurta },
+          { property: "og:title", content: loaderData.benefit.nome },
+          { property: "og:description", content: loaderData.benefit.descricaoCurta },
+        ]
+      : [],
+  }),
+  notFoundComponent: () => (
+    <div className="mx-auto max-w-3xl px-4 py-20 text-center">
+      <h1 className="text-3xl font-bold">Benefício não encontrado</h1>
+      <Link to="/beneficios" className="mt-4 inline-block text-primary">
+        Ver catálogo
+      </Link>
+    </div>
+  ),
+  errorComponent: ({ error }) => (
+    <div className="mx-auto max-w-3xl px-4 py-20 text-center">
+      <p className="text-muted-foreground">{(error as Error).message}</p>
+    </div>
+  ),
   component: BenefitPage,
 });
-type Step = { titulo?: string; descricao?: string };
-type FAQ = { pergunta?: string; resposta?: string };
-type Extra = { dicas?: string[]; errosComuns?: Step[]; faq?: FAQ[] };
-function textItems(v: unknown): string[] { return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; }
-function stepItems(v: unknown): Step[] { return Array.isArray(v) ? v.filter((x): x is Step => !!x && typeof x === "object") : []; }
-function Details({ title, items }: { title: string; items: string[] }) {
-  return items.length ? <section className="space-y-4"><h2 className="text-2xl font-bold">{title}</h2>
-    <ul className="space-y-3">{items.map((item, i) => <li key={i} className="flex gap-3 rounded-xl border border-border bg-card p-4"><Icons.CheckCircle2 className="size-5 shrink-0 text-primary"/><span>{item}</span></li>)}</ul>
-  </section> : null;
-}
+
 function BenefitPage() {
-  const { benefit } = Route.useLoaderData();
+  const { benefit: meta } = Route.useLoaderData() as { benefit: Benefit };
   const { user, canOpen, checking } = useBenefitAccess();
-  const locked = !canOpen(benefit.slug);
-  const [payOpen, setPayOpen] = useState(false);
-  const category = getCategory(benefit.category);
-  const Icon = (Icons as unknown as Record<string, React.ComponentType<{className?: string}>>)[benefit.icon] ?? Icons.BookOpen;
-  const guide = useQuery({
-    queryKey: ["benefit-guide", user?.id, benefit.slug],
-    enabled: !checking && !locked,
+  const locked = !canOpen(meta.slug);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const detail = useQuery({
+    queryKey: ["original-benefit-guide", user?.id, meta.slug],
+    enabled: !locked && !checking,
     retry: false,
     queryFn: async () => {
-      const { data: row, error: lookupError } = await supabase.from("benefits")
-        .select("id").eq("slug", benefit.slug).eq("is_published", true).maybeSingle();
+      const slug = meta.slug === "bpc" ? "bpc-loas" : meta.slug;
+      const { data: found, error: lookupError } = await supabase.from("benefits")
+        .select("id").eq("slug", slug).eq("is_published", true).maybeSingle();
       if (lookupError) throw lookupError;
-      if (!row) return null;
+      if (!found) return null;
       const { data, error } = await supabase.from("benefit_contents")
-        .select("what_is,who_qualifies,value_info,how_to_apply,documents,important")
-        .eq("benefit_id", row.id).maybeSingle();
+        .select("what_is, who_qualifies, documents, how_to_apply, important")
+        .eq("benefit_id", found.id).maybeSingle();
       if (error) throw error;
       return data;
     },
   });
+  const content = detail.data;
+  const extras = content?.important && !Array.isArray(content.important) && typeof content.important === "object" ?
+    content.important as { errosComuns?: Benefit["errosComuns"]; dicas?: string[]; faq?: Benefit["faq"] } : {};
+  const benefit: Benefit = {
+    ...meta,
+    oQueE: typeof content?.what_is === "string" ? content.what_is : "",
+    quemTemDireito: Array.isArray(content?.who_qualifies) ? content.who_qualifies.filter((x): x is string => typeof x === "string") : [],
+    documentos: Array.isArray(content?.documents) ? content.documents.filter((x): x is string => typeof x === "string") : [],
+    comoSolicitar: Array.isArray(content?.how_to_apply) ? content.how_to_apply as unknown as Benefit["comoSolicitar"] : [],
+    errosComuns: Array.isArray(extras.errosComuns) ? extras.errosComuns : [],
+    dicas: Array.isArray(extras.dicas) ? extras.dicas : [],
+    faq: Array.isArray(extras.faq) ? extras.faq : [],
+  };
+
   if (checking || locked) return <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
-    <div className="mx-auto flex size-20 items-center justify-center rounded-2xl bg-primary-soft text-primary"><Icons.LockKeyhole className="size-10"/></div>
-    <h1 className="text-3xl font-bold">{benefit.name}</h1>
-    <p className="text-muted-foreground">{checking ? "Conferindo suas permissões…" : "Este material é reservado aos usuários com acesso liberado. Os pedidos de benefícios do governo são gratuitos nos canais oficiais."}</p>
-    {!checking && <button className="rounded-full bg-primary px-7 py-3 font-semibold text-primary-foreground" onClick={() => setPayOpen(true)}>{user ? "Desbloquear conteúdo" : "Criar conta para desbloquear"}</button>}
+    <div className="mx-auto grid size-20 place-items-center rounded-2xl bg-primary-soft text-primary"><LockKeyhole className="size-10"/></div>
+    <h1 className="text-3xl font-bold">{meta.nome}</h1>
+    <p className="text-muted-foreground">{checking ? "Verificando o acesso…" : "Este guia faz parte do conteúdo exclusivo. Os benefícios do governo podem ser solicitados gratuitamente pelos canais oficiais."}</p>
+    {!checking && <button className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground" onClick={() => setPaymentOpen(true)}>{user ? "Desbloquear guia" : "Criar conta para desbloquear"}</button>}
     <div><Link to="/beneficios" className="text-primary underline">Voltar ao catálogo</Link></div>
-    <PaymentPrompt open={payOpen} onOpenChange={setPayOpen} benefitName={benefit.name}/>
+    <PaymentPrompt open={paymentOpen} onOpenChange={setPaymentOpen} benefitName={meta.nome} />
   </div>;
-  const d = guide.data;
-  const extra = d?.important && !Array.isArray(d.important) && typeof d.important === "object" ? d.important as Extra : {};
-  const steps = stepItems(d?.how_to_apply);
-  return <article className="pb-16">
-    <section className={`bg-gradient-to-br ${benefit.gradient} text-white`}>
-      <div className="mx-auto max-w-5xl px-4 py-12 sm:py-16">
-        <Link to="/beneficios" className="mb-6 inline-flex items-center gap-2 text-white/90"><Icons.ArrowLeft className="size-4"/> Voltar ao catálogo</Link>
-        <div className="flex items-start gap-5"><span className="hidden sm:grid size-16 shrink-0 place-items-center rounded-2xl bg-white/15"><Icon className="size-8"/></span><div>
-          <p className="mb-2 text-sm text-white/80">{category?.name}</p>
-          <h1 className="text-3xl sm:text-5xl font-bold">{benefit.name}</h1>
-          <p className="mt-4 max-w-2xl text-white/90">{benefit.shortDescription}</p>
-        </div></div>
+  if (detail.isPending) return <div role="status" className="mx-auto max-w-3xl px-4 py-20 text-muted-foreground">Carregando orientações…</div>;
+  if (detail.isError || !content) return <div role="alert" className="mx-auto max-w-3xl px-4 py-20 text-destructive">Não foi possível carregar o conteúdo. Tente novamente ou procure o suporte.</div>;
+  const category = getCategory(benefit.categoria);
+  const Icon = category
+    ? (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[category.icon] ?? Icons.Circle
+    : Icons.Circle;
+
+  const related = benefits
+    .filter((b) => b.categoria === benefit.categoria && b.slug !== benefit.slug)
+    .slice(0, 3);
+
+  return (
+    <article>
+      {/* Hero */}
+      <section
+        className={cn(
+          "relative overflow-hidden bg-gradient-to-br",
+          category?.gradient ?? "from-slate-600 to-slate-800",
+        )}
+      >
+        <div className="absolute inset-0 opacity-15">
+          <Icon className="absolute -right-16 -bottom-16 h-96 w-96 text-white" />
+        </div>
+        <div className="relative mx-auto max-w-5xl px-4 sm:px-6 py-8 sm:py-12 md:py-16 text-white">
+          <Link
+            to="/beneficios"
+            className="inline-flex items-center gap-1 text-sm text-white/90 hover:text-white mb-4 sm:mb-6 -ml-1 py-1.5"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar ao catálogo
+          </Link>
+          <div className="flex items-start justify-between gap-3 sm:gap-4">
+            <div className="flex-1">
+              <Badge className="mb-2 sm:mb-3 bg-white/20 text-white hover:bg-white/30 border-0">
+                {category?.nome}
+              </Badge>
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold leading-tight">
+                {benefit.nome}
+              </h1>
+              <p className="mt-2 sm:mt-3 text-base sm:text-lg text-white/90 max-w-2xl">{benefit.descricaoCurta}</p>
+              {benefit.valor && (
+                <div className="mt-4 sm:mt-5 inline-flex items-center rounded-full bg-white/15 px-4 py-2 text-sm font-medium backdrop-blur">
+                  💰 {benefit.valor}
+                </div>
+              )}
+            </div>
+            <FavoriteButton slug={benefit.slug} />
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-8 sm:py-12 space-y-8 sm:space-y-12">
+        {/* O que é */}
+        <Section title="O que é">
+          <p className="text-foreground/80 leading-relaxed">{benefit.oQueE}</p>
+        </Section>
+
+        {/* Quem tem direito */}
+        <Section title="Quem tem direito">
+          <ul className="space-y-3">
+            {benefit.quemTemDireito.map((item, i) => (
+              <li key={i} className="flex items-start gap-3">
+                <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+                <span className="text-foreground/80">{item}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+
+        {/* Documentos */}
+        <Section title="Documentos necessários">
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <ul className="space-y-3">
+              {benefit.documentos.map((doc, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <span className="text-sm text-foreground/80">{doc}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Section>
+
+        {/* Como solicitar */}
+        <Section title="Como solicitar">
+          <ol className="space-y-4">
+            {benefit.comoSolicitar.map((passo, i) => (
+              <li
+                key={i}
+                className="flex gap-4 rounded-2xl border border-border bg-card p-5"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full gradient-primary text-white font-semibold">
+                  {i + 1}
+                </span>
+                <div>
+                  <h3 className="font-semibold">{passo.titulo}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{passo.descricao}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </Section>
+
+        {/* Erros comuns */}
+        <Section title="Erros comuns">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {benefit.errosComuns.map((erro, i) => (
+              <div key={i} className="rounded-2xl border border-red-200 bg-red-50/60 p-4">
+                <div className="flex items-center gap-2 text-red-700">
+                  <AlertTriangle className="h-4 w-4" />
+                  <h3 className="font-semibold text-sm">{erro.titulo}</h3>
+                </div>
+                <p className="mt-2 text-sm text-red-900/80">{erro.descricao}</p>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {/* Dicas */}
+        <Section title="Dicas importantes">
+          <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50 p-5">
+            <div className="flex items-center gap-2 text-amber-700 mb-3">
+              <Lightbulb className="h-5 w-5" />
+              <h3 className="font-semibold">Fique de olho</h3>
+            </div>
+            <ul className="space-y-2">
+              {benefit.dicas.map((d, i) => (
+                <li key={i} className="text-sm text-amber-900/90 flex gap-2">
+                  <span>•</span>
+                  <span>{d}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Section>
+
+        {/* FAQ */}
+        <Section title="Perguntas frequentes">
+          <Accordion type="single" collapsible className="rounded-2xl border border-border bg-card px-5">
+            {benefit.faq.map((f, i) => (
+              <AccordionItem key={i} value={`item-${i}`} className="border-border last:border-0">
+                <AccordionTrigger className="text-left font-medium">
+                  {f.pergunta}
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  {f.resposta}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </Section>
+
+        {related.length > 0 && (
+          <Section title="Benefícios relacionados">
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+              {related.map((r) => (
+                <Link
+                  key={r.slug}
+                  to="/beneficios/$slug"
+                  params={{ slug: r.slug }}
+                  className="rounded-xl border border-border bg-card p-4 hover:border-primary hover:shadow-soft transition"
+                >
+                  <h3 className="font-semibold text-sm">{r.nome}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                    {r.descricaoCurta}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </Section>
+        )}
       </div>
+    </article>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-3 sm:mb-4">{title}</h2>
+      {children}
     </section>
-    <div className="mx-auto max-w-4xl px-4 py-10 space-y-10">
-      {guide.isPending ? <p role="status">Carregando orientações…</p> :
-        guide.isError ? <p role="alert" className="text-destructive">Não foi possível carregar este conteúdo. Tente novamente.</p> :
-        !d ? <p className="text-muted-foreground">Este guia ainda não está disponível.</p> :
-        <>
-          {d.what_is && <section><h2 className="mb-4 text-2xl font-bold">O que é</h2><p className="leading-relaxed text-foreground/80">{d.what_is}</p></section>}
-          <Details title="Quem tem direito" items={textItems(d.who_qualifies)}/>
-          <Details title="Valores e condições" items={textItems(d.value_info)}/>
-          <Details title="Documentos necessários" items={textItems(d.documents)}/>
-          {steps.length ? <section><h2 className="mb-4 text-2xl font-bold">Como solicitar</h2><ol className="space-y-4">{steps.map((step,i)=><li key={i} className="flex gap-4 rounded-2xl border bg-card p-5"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">{i+1}</span><div><h3 className="font-semibold">{step.titulo}</h3><p className="mt-1 text-sm text-muted-foreground">{step.descricao}</p></div></li>)}</ol></section> : <Details title="Como solicitar" items={textItems(d.how_to_apply)}/>}
-          <Details title="Dicas úteis" items={extra.dicas ?? []}/>
-          {extra.errosComuns?.length ? <section><h2 className="mb-4 text-2xl font-bold">Erros comuns</h2><div className="grid gap-3 sm:grid-cols-2">{extra.errosComuns.map((e,i)=><div key={i} className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900"><p className="font-semibold">{e.titulo}</p><p className="mt-2 text-sm">{e.descricao}</p></div>)}</div></section> : null}
-          {extra.faq?.length ? <section><h2 className="mb-4 text-2xl font-bold">Perguntas frequentes</h2><div className="space-y-3">{extra.faq.map((faq,i)=><details key={i} className="rounded-xl border bg-card p-4"><summary className="cursor-pointer font-semibold">{faq.pergunta}</summary><p className="mt-3 text-sm text-muted-foreground">{faq.resposta}</p></details>)}</div></section> : null}
-        </>}
-      <p className="border-t pt-5 text-xs text-muted-foreground">Plataforma informativa privada, sem vínculo com o governo. Consulte a legislação e as regras atuais nos canais oficiais. O acesso aos benefícios governamentais é gratuito.</p>
-    </div>
-  </article>;
+  );
 }

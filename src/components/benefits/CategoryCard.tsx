@@ -12,7 +12,7 @@ export function CategoryCard({ category }: Props) {
   return (
     <Link
       to="/beneficios"
-      search={{ category: category.id, q: "" }}
+      search={{ categoria: category.id, q: "" }}
       className="group flex flex-col items-start gap-3 rounded-2xl border border-border bg-card p-5 shadow-card hover-lift focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="inline-flex size-12 items-center justify-center rounded-xl bg-primary-soft text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">

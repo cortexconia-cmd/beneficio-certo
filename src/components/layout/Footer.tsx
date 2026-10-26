@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Plus, ShieldAlert } from "lucide-react";
 
 export function Footer() {
   return (
@@ -15,8 +15,9 @@ export function Footer() {
               <span className="font-semibold tracking-tight">Benefícios</span>
             </div>
             <p className="mt-3 text-sm text-muted-foreground max-w-xs">
-              Catálogo simples e organizado de benefícios sociais brasileiros, com explicações fáceis para quem mais precisa.
+              Conteúdos informativos privados e guias organizados para entender os benefícios do governo brasileiro.
             </p>
+            <div className="mt-4 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><ShieldAlert className="size-4 shrink-0"/> Os benefícios do governo são gratuitos. Não cobramos por inscrições, aprovações ou liberações governamentais.</div>
           </div>
           <div>
             <h4 className="font-semibold text-sm mb-3">Navegar</h4>
@@ -30,12 +31,12 @@ export function Footer() {
           <div>
             <h4 className="font-semibold text-sm mb-3">Importante</h4>
             <p className="text-sm text-muted-foreground">
-              As informações deste site são demonstrativas. Para dados oficiais, consulte sempre os canais do governo federal.
+              Somos uma plataforma independente, sem vínculo com órgãos governamentais. Nosso produto é acesso a conteúdo explicativo. Consulte os canais oficiais como gov.br, CRAS, Caixa e INSS.
             </p>
           </div>
         </div>
         <div className="mt-10 pt-6 border-t border-border text-xs text-muted-foreground">
-          © 2026 Projeto+Benefícios. Plataforma demonstrativa.
+          © {new Date().getFullYear()} Projeto + Benefícios. Conteúdo informativo não substitui orientação ou canais oficiais.
         </div>
       </div>
     </footer>

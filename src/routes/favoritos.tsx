@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
-import { benefits } from "@/data/benefits";
+import { useLiveBenefits } from "@/hooks/use-live-benefits";
 import { BenefitCard } from "@/components/BenefitCard";
 import { Button } from "@/components/ui/button";
 
@@ -17,6 +17,7 @@ export const Route = createFileRoute("/favoritos")({
 
 function FavoritesPage() {
   const { favorites } = useFavorites();
+  const { benefits } = useLiveBenefits();
   const saved = benefits.filter((b) => favorites.includes(b.slug));
 
   return (

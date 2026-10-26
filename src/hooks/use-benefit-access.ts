@@ -21,14 +21,28 @@ export function useBenefitAccess() {
       return data.filter(g => !g.revoked_at && Date.parse(g.starts_at) <= now && (!g.expires_at || Date.parse(g.expires_at) > now));
     },
   });
-  const hasCatalog = !!user && phoneVerified && !!access.data?.some(g => g.access_scope === "catalog");
+  const staffRole = useQuery({
+    queryKey: ["benefit-staff-role", user?.id],
+    enabled: !!user?.id && !authLoading,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_roles")
+        .select("role").eq("user_id", user!.id).in("role", ["admin", "admin_master"]);
+      if (error) throw error;
+      return !!data?.length;
+    },
+  });
+  // Admin and AdminMaster have premium rights from their roles, not fake payment records.
+  const isStaff = !!user && staffRole.data === true && !staffRole.isError;
+  const hasCatalog = isStaff || (!!user && phoneVerified && !!access.data?.some(g => g.access_scope === "catalog"));
   return {
-    user, phoneVerified, hasCatalog,
-    checking: authLoading || (!!user && (access.isPending || access.isFetching)),
+    user, phoneVerified, hasCatalog, isStaff,
+    checking: authLoading || (!!user && (access.isPending || access.isFetching || staffRole.isPending || staffRole.isFetching)),
     error: access.error,
     canOpen: (slug: string, benefitId?: string) =>
       isFreeBenefit(slug) || (hasCatalog && !access.isError) ||
       (!!user && phoneVerified && !!benefitId && !!access.data?.some(g => g.access_scope === "benefit" && g.benefit_id === benefitId)),
-    refresh: access.refetch,
+    refresh: async () => { await Promise.all([access.refetch(), staffRole.refetch()]); },
   };
 }

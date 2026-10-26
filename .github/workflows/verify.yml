@@ -1,7 +1,7 @@
 name: Beneficio Certo - Validacao
 on:
   push:
-    branches: [main, feature/acesso-asaas, feature/migracao-integral-seu-guia]
+    branches: [main, feature/acesso-asaas, feature/migracao-integral-seu-guia, feature/admin-dashboard]
   pull_request:
     branches: [main]
 jobs:

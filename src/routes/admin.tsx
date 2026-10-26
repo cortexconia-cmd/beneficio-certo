@@ -17,7 +17,7 @@ export const Route = createFileRoute("/admin")({
 
 type Row=Record<string,unknown>;
 type Dashboard={totalUsers:number;newUsers:number;sessions:number;uniqueVisitors:number;registrationStarted:number;ordersCreated:number;checkoutStarted:number;paidOrders:number;pendingOrders:number;revenueCents:number;refundedCents:number;activeAccess:number;publishedBenefits:number;totalBenefits:number;daily:{date:string;registrations:number;sessions:number;purchases:number}[]};
-type Section="visao"|"usuarios"|"pedidos"|"aquisicao"|"conteudos"|"preco"|"auditoria";
+type Section="visao"|"usuarios"|"pedidos"|"aquisicao"|"conteudos"|"preco"|"auditoria"|"equipe";
 const nav:{id:Section;label:string;icon:React.ComponentType<{className?:string}>}[]=[
   {id:"visao",label:"Visão geral",icon:Icons.LayoutDashboard},
   {id:"usuarios",label:"Usuários",icon:Icons.Users},
@@ -26,6 +26,7 @@ const nav:{id:Section;label:string;icon:React.ComponentType<{className?:string}>
   {id:"conteudos",label:"Benefícios",icon:Icons.BookOpen},
   {id:"preco",label:"Configurações",icon:Icons.Settings2},
   {id:"auditoria",label:"Auditoria",icon:Icons.ScrollText},
+  {id:"equipe",label:"Equipe administrativa",icon:Icons.UserCog},
 ];
 const money=(cents:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(cents/100);
 const date=(d:unknown)=>typeof d==="string"?new Date(d).toLocaleDateString("pt-BR"):"—";
@@ -55,23 +56,25 @@ function Admin(){
  const [message,setMessage]=useState("");
  const [error,setError]=useState("");
  const cache=useQueryClient();
- const authorized=useQuery({queryKey:["admin-check",user?.id],enabled:!!user&&!authLoading,queryFn:()=>api<{data:Dashboard}>("overview",{period}),retry:false,staleTime:60000});
+ const authorized=useQuery({queryKey:["admin-check",user?.id],enabled:!!user&&!authLoading,queryFn:()=>api<{data:Dashboard;role:"admin"|"admin_master"}>("overview",{period}),retry:false,staleTime:60000});
  const isAdmin=!!user&&authorized.isSuccess;
- const data=useQuery({queryKey:["admin-view",user?.id,section,period,page,search],enabled:isAdmin,queryFn:()=>api<Row>(section==="visao"?"overview":section==="usuarios"?"users":section==="pedidos"?"orders":section==="aquisicao"?"acquisition":section==="conteudos"?"benefits":section==="preco"?"setting":"audit",{period,page,search}),staleTime:10000});
+ const isMaster=isAdmin&&authorized.data?.role==="admin_master";
+ const visibleNav=nav.filter(n=>n.id!=="equipe"||isMaster);
+ const data=useQuery({queryKey:["admin-view",user?.id,section,period,page,search],enabled:isAdmin,queryFn:()=>api<Row>(section==="visao"?"overview":section==="usuarios"?"users":section==="pedidos"?"orders":section==="aquisicao"?"acquisition":section==="conteudos"?"benefits":section==="preco"?"setting":section==="equipe"?"staff-list":"audit",{period,page,search}),staleTime:10000});
  const choose=(s:Section)=>{setSection(s);setPage(0);setSearch("");setMessage("");setError("")};
  const refresh=()=>{void cache.invalidateQueries({queryKey:["admin-view"]});void cache.invalidateQueries({queryKey:["admin-check"]})};
  const run=async (action:string,payload:Row)=>{setMessage("");setError("");try{const response=await api<{success:boolean}>(action,payload);if(!response.success)throw new Error("Nenhum registro foi modificado.");setMessage("Alteração salva com registro de auditoria.");refresh();return true}catch(e){setError(e instanceof Error?e.message:"Falha ao salvar.");return false}};
- const headline=nav.find(x=>x.id===section)?.label;
+ const headline=visibleNav.find(x=>x.id===section)?.label;
  const result:Row=data.data??{};
  if(authLoading)return <div className="mx-auto max-w-6xl px-4 py-24 text-center">Verificando sessão…</div>;
  if(!user)return <main className="mx-auto max-w-lg px-4 py-20 text-center"><Icons.ShieldCheck className="mx-auto size-14 text-primary"/><h1 className="mt-4 text-3xl font-bold">Área administrativa</h1><p className="mt-3 text-muted-foreground">Entre com sua conta de administrador para acessar o painel.</p><Button className="mt-5" onClick={()=>setLoginOpen(true)}>Entrar</Button><LoginDialog open={loginOpen} onOpenChange={setLoginOpen}/></main>;
  if(authorized.isPending)return <div className="mx-auto max-w-6xl px-4 py-24 text-center" role="status">Validando permissões administrativas…</div>;
  if(authorized.isError)return <main className="mx-auto max-w-lg px-4 py-20 text-center"><Icons.LockKeyhole className="mx-auto size-14 text-muted-foreground"/><h1 className="mt-4 text-2xl font-bold">Acesso restrito</h1><p className="mt-2 text-muted-foreground">Somente administradores autorizados podem consultar esta área.</p><Link to="/" className="mt-5 inline-block text-primary underline">Voltar ao portal</Link></main>;
  return <div className="mx-auto flex min-h-[75vh] max-w-[1500px] gap-0 lg:gap-7 px-3 sm:px-6 py-6 lg:py-10">
-   <aside className="hidden lg:block w-56 shrink-0"><div className="sticky top-24 rounded-2xl border border-border bg-white p-3 shadow-soft"><div className="mb-3 px-3 py-3"><p className="text-xs uppercase font-bold tracking-widest text-primary">Projeto + Benefícios</p><p className="text-lg font-bold">Administração</p></div><nav className="space-y-1">{nav.map(x=><button key={x.id} onClick={()=>choose(x.id)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition ${section===x.id?"bg-primary text-primary-foreground":"text-muted-foreground hover:bg-secondary hover:text-foreground"}`}><x.icon className="size-4"/>{x.label}</button>)}</nav><Link to="/" className="mt-4 flex items-center gap-2 border-t px-3 pt-4 text-sm text-primary"><Icons.ArrowLeft className="size-4"/>Voltar ao portal</Link></div></aside>
+   <aside className="hidden lg:block w-56 shrink-0"><div className="sticky top-24 rounded-2xl border border-border bg-white p-3 shadow-soft"><div className="mb-3 px-3 py-3"><p className="text-xs uppercase font-bold tracking-widest text-primary">Projeto + Benefícios</p><p className="text-lg font-bold">Administração</p></div><nav className="space-y-1">{visibleNav.map(x=><button key={x.id} onClick={()=>choose(x.id)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition ${section===x.id?"bg-primary text-primary-foreground":"text-muted-foreground hover:bg-secondary hover:text-foreground"}`}><x.icon className="size-4"/>{x.label}</button>)}</nav><Link to="/" className="mt-4 flex items-center gap-2 border-t px-3 pt-4 text-sm text-primary"><Icons.ArrowLeft className="size-4"/>Voltar ao portal</Link></div></aside>
    <main className="min-w-0 flex-1 space-y-6">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-medium text-primary">Painel de gestão</p><h1 className="mt-1 text-2xl sm:text-3xl font-bold">{headline}</h1></div><div className="flex items-center gap-2"><Status><Icons.ShieldCheck className="mr-1 inline size-3"/> Administrador</Status><Button variant="outline" size="sm" onClick={refresh}><Icons.RefreshCw className="mr-2 size-4"/>Atualizar</Button></div></div>
-    <nav aria-label="Seções do painel" className="flex gap-2 overflow-x-auto pb-2 lg:hidden scrollbar-none">{nav.map(n=><button key={n.id} onClick={()=>choose(n.id)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium ${section===n.id?"border-primary bg-primary text-white":"bg-white text-muted-foreground"}`}>{n.label}</button>)}</nav>
+    <nav aria-label="Seções do painel" className="flex gap-2 overflow-x-auto pb-2 lg:hidden scrollbar-none">{visibleNav.map(n=><button key={n.id} onClick={()=>choose(n.id)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium ${section===n.id?"border-primary bg-primary text-white":"bg-white text-muted-foreground"}`}>{n.label}</button>)}</nav>
     {(section==="visao"||section==="aquisicao")&&<div className="flex flex-wrap items-center gap-2"><span className="text-sm text-muted-foreground">Período:</span>{[7,30,90,365].map(n=><button key={n} className={`rounded-full px-3 py-1.5 text-sm ${n===period?"bg-primary text-white":"bg-secondary text-foreground"}`} onClick={()=>setPeriod(n)}>{n===365?"1 ano":n+" dias"}</button>)}</div>}
     {message&&<div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{message}</div>}
     {error&&<div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">{error}</div>}
@@ -82,6 +85,7 @@ function Admin(){
     section==="pedidos"?<Orders rows={result.rows} profiles={result.profiles} search={search} setSearch={setSearch} page={page} setPage={setPage} total={toNum(result.total)}/>:
     section==="conteudos"?<Benefits rows={result.data} run={run}/>:
     section==="preco"?<Settings data={result.data} run={run}/>:
+    section==="equipe"&&isMaster?<Staff rows={result.data} actorId={user.id} run={run}/>:
     <Audit rows={result.rows} page={page} total={toNum(result.total)} setPage={setPage}/>}
    </main>
  </div>;
@@ -145,4 +149,81 @@ function Settings({data,run}:{data:unknown;run:(a:string,p:Row)=>Promise<boolean
 function Audit({rows,page,total,setPage}:{rows:unknown;page:number;total:number;setPage:(n:number)=>void}){
  const list=isArray(rows)?rows.filter(isRecord):[];
  return <section className="rounded-2xl border bg-white p-5 shadow-soft"><h2 className="mb-4 font-bold text-lg">Histórico de alterações administrativas</h2><div className="space-y-3">{list.map(x=><div key={toStr(x.id)} className="border-b pb-3"><p className="font-medium text-sm">{toStr(x.action)}</p><p className="mt-1 text-xs text-muted-foreground">{date(x.created_at)} · {toStr(x.entity_type)} · {toStr(x.entity_id)}</p></div>)}</div>{!list.length&&<Empty message="Nenhuma alteração administrativa registrada."/>}<Pages page={page} total={total} setPage={setPage}/></section>;
+}
+
+
+function Staff({rows,actorId,run}:{rows:unknown;actorId:string;run:(action:string,payload:Row)=>Promise<boolean>}){
+ const members=isArray(rows)?rows.filter(isRecord):[];
+ const [inviteEmail,setInviteEmail]=useState("");
+ const [inviteRole,setInviteRole]=useState<"admin"|"admin_master">("admin");
+ const [selected,setSelected]=useState<string|null>(null);
+ const [role,setRole]=useState<"admin"|"admin_master"|"none">("admin");
+ const [reason,setReason]=useState("");
+ const [lookup,setLookup]=useState("");
+ const [lookupOpen,setLookupOpen]=useState(false);
+ const [busy,setBusy]=useState(false);
+ const findPeople=useQuery({
+   queryKey:["admin-staff-find",lookup],enabled:lookupOpen&&lookup.trim().length>=3,
+   queryFn:()=>api<{rows:Row[];total:number}>("users",{search:lookup.trim(),page:0}),staleTime:5000
+ });
+ async function invite(event:React.FormEvent) {
+   event.preventDefault();
+   if(busy)return;
+   setBusy(true);
+   try {
+     const ok=await run("staff-invite",{email:inviteEmail.trim(),staffRole:inviteRole});
+     if(ok)setInviteEmail("");
+   } finally {setBusy(false);}
+ }
+ async function changeRole(){
+   if(!selected||busy)return;
+   setBusy(true);
+   try{
+     const ok=await run("staff-role",{targetUserId:selected,staffRole:role,reason:reason.trim()});
+     if(ok){setSelected(null);setReason("");setLookup("");setLookupOpen(false);}
+   }finally{setBusy(false);}
+ }
+ const choose=(id:string,current:"admin"|"admin_master"|"none")=>{setSelected(id);setRole(current);setReason("")};
+ return <div className="space-y-5">
+  <div className="grid gap-4 lg:grid-cols-2">
+   <section className="rounded-2xl border bg-white p-5 shadow-soft space-y-4">
+     <div><h2 className="text-lg font-bold">Convidar administrador</h2><p className="mt-1 text-sm text-muted-foreground">O convite é enviado ao e-mail. A pessoa define a própria senha para entrar no painel.</p></div>
+     <form onSubmit={invite} className="space-y-3">
+       <div className="space-y-1"><Label htmlFor="staff-email">E-mail do convidado</Label><Input required id="staff-email" type="email" autoComplete="off" maxLength={250} placeholder="pessoa@empresa.com" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}/></div>
+       <div className="space-y-1"><Label htmlFor="staff-role">Cargo</Label><select id="staff-role" className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm" value={inviteRole} onChange={e=>setInviteRole(e.target.value as "admin"|"admin_master")}><option value="admin">Admin</option><option value="admin_master">AdminMaster</option></select></div>
+       <Button type="submit" className="w-full" disabled={busy||!inviteEmail.includes("@")}><Icons.MailPlus className="mr-2 size-4"/>{busy?"Aguarde…":"Enviar convite"}</Button>
+       <p className="text-xs text-muted-foreground">Limite de 20 convites por dia. Não há senha compartilhada ou cadastro automático de contas já existentes.</p>
+     </form>
+   </section>
+   <section className="rounded-2xl border bg-white p-5 shadow-soft space-y-3">
+     <h2 className="text-lg font-bold">Promover conta existente</h2>
+     <p className="text-sm text-muted-foreground">Busque uma pessoa já cadastrada e escolha seu novo cargo administrativo.</p>
+     <Input aria-label="Buscar conta existente" placeholder="Nome ou e-mail cadastrado" value={lookup} onChange={e=>{setLookup(e.target.value);setLookupOpen(true)}}/>
+     {lookupOpen && lookup.trim().length>=3 && <div className="max-h-60 overflow-y-auto rounded-xl border border-border">
+       {findPeople.isPending?<p className="p-3 text-sm">Buscando…</p>:findPeople.isError?<p role="alert" className="p-3 text-sm text-destructive">Busca indisponível.</p>:!findPeople.data?.rows?.length?<p className="p-3 text-sm text-muted-foreground">Nenhuma conta encontrada.</p>:
+       findPeople.data.rows.map(p=><button type="button" key={toStr(p.id)} className="block w-full border-b p-3 text-left text-sm hover:bg-secondary" onClick={()=>{choose(toStr(p.id),"admin");setLookupOpen(false)}}>
+         <strong>{toStr(p.full_name)}</strong><span className="block text-xs text-muted-foreground">{toStr(p.email)}</span>
+       </button>)}
+     </div>}
+     <p className="text-xs text-muted-foreground">A conta precisa existir no Supabase; convites de novas contas são feitos no formulário ao lado.</p>
+   </section>
+  </div>
+  <section className="rounded-2xl border bg-white p-5 shadow-soft">
+    <h2 className="mb-4 text-lg font-bold">Administradores cadastrados</h2>
+    <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-sm"><thead className="border-b text-muted-foreground"><tr><th className="pb-3">Conta</th><th className="pb-3">Cargo</th><th className="pb-3">Convite</th><th></th></tr></thead><tbody>{members.map(m=>{
+       const id=toStr(m.id);
+       const current=toStr(m.role)==="admin_master"?"admin_master":"admin";
+       return <tr key={id} className="border-b"><td className="py-3"><strong>{toStr(m.name)||toStr(m.email)}</strong><span className="block text-xs text-muted-foreground">{toStr(m.email)}</span></td><td><Status>{current==="admin_master"?"AdminMaster":"Admin"}</Status></td><td><Status>{m.confirmed?"Confirmado":"Aguardando aceite"}</Status></td><td>{id===actorId?<span className="text-xs text-muted-foreground">Sua conta</span>:<Button type="button" size="sm" variant="outline" onClick={()=>choose(id,current)}>Alterar cargo</Button>}</td></tr>
+     })}</tbody></table></div>
+    {!members.length&&<Empty message="Nenhum administrador registrado."/>}
+  </section>
+  {selected && <section className="rounded-2xl border border-primary/30 bg-white p-5 shadow-soft space-y-4">
+    <div className="flex items-center justify-between gap-2"><h3 className="text-lg font-bold">Alterar permissões</h3><Button variant="ghost" size="sm" onClick={()=>setSelected(null)}>Cancelar</Button></div>
+    <p className="text-xs text-muted-foreground">Conta selecionada: {selected}</p>
+    <div className="space-y-1"><Label htmlFor="new-role">Novo cargo</Label><select id="new-role" className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm" value={role} onChange={e=>setRole(e.target.value as "admin"|"admin_master"|"none")}><option value="admin">Admin</option><option value="admin_master">AdminMaster</option><option value="none">Remover acesso ao painel</option></select></div>
+    <div className="space-y-1"><Label htmlFor="role-reason">Motivo da alteração</Label><Textarea id="role-reason" required minLength={8} maxLength={500} placeholder="Informe o motivo desta alteração" value={reason} onChange={e=>setReason(e.target.value)}/></div>
+    <Button onClick={()=>void changeRole()} disabled={busy||reason.trim().length<8||selected===actorId}>{busy?"Salvando…":"Confirmar alteração de cargo"}</Button>
+    <p className="text-xs text-muted-foreground">Somente AdminMaster pode alterar cargos. Não é possível alterar o próprio cargo nem remover o último AdminMaster. Toda alteração é auditada.</p>
+  </section>}
+ </div>;
 }

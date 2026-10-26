@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth, isActiveGrant } from "@/hooks/use-auth";
@@ -30,6 +30,7 @@ function AccountPage() {
   const [now, setNow] = useState(0);
   useEffect(() => { setNow(Date.now()); const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { setName(profile?.full_name || ""); setWhatsapp(profile?.whatsapp || ""); setSuccess(""); setError(""); }, [profile]);
+  const adminRole = useQuery({ queryKey:["admin-role",user?.id], enabled:!!user, queryFn: async()=>{const {data,error}=await supabase.from("user_roles").select("role").eq("user_id",user!.id).eq("role","admin").maybeSingle();if(error)throw error;return Boolean(data)} });
   const grants = useQuery({
     queryKey: ["account-access-grants", user?.id],
     enabled: Boolean(user),
@@ -67,6 +68,7 @@ function AccountPage() {
         {success && <p role="status" className="text-sm text-primary">{success}</p>}
         <Button type="submit" disabled={loading || !profile}>{loading ? "Aguarde…" : "Salvar alterações"}</Button>
       </form>
+      {adminRole.data && <Link to="/admin" className="mt-8 inline-flex items-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">Abrir painel administrativo</Link>}
       <section className="mt-10 border-t border-border pt-6">
         <h2 className="text-xl font-semibold mb-3">Status de acesso</h2>
         {grants.isPending ? <p role="status" className="text-muted-foreground">Consultando acesso…</p> : grants.isError ? <>

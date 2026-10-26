@@ -46,7 +46,7 @@ export const Route = createFileRoute("/beneficios/$slug")({
   ),
   errorComponent: ({ error }) => (
     <div className="mx-auto max-w-3xl px-4 py-20 text-center">
-      <p className="text-muted-foreground">{error.message}</p>
+      <p className="text-muted-foreground">{(error as Error).message}</p>
     </div>
   ),
   component: BenefitPage,
@@ -82,7 +82,7 @@ function BenefitPage() {
     oQueE: typeof content?.what_is === "string" ? content.what_is : "",
     quemTemDireito: Array.isArray(content?.who_qualifies) ? content.who_qualifies.filter((x): x is string => typeof x === "string") : [],
     documentos: Array.isArray(content?.documents) ? content.documents.filter((x): x is string => typeof x === "string") : [],
-    comoSolicitar: Array.isArray(content?.how_to_apply) ? content.how_to_apply as Benefit["comoSolicitar"] : [],
+    comoSolicitar: Array.isArray(content?.how_to_apply) ? content.how_to_apply as unknown as Benefit["comoSolicitar"] : [],
     errosComuns: Array.isArray(extras.errosComuns) ? extras.errosComuns : [],
     dicas: Array.isArray(extras.dicas) ? extras.dicas : [],
     faq: Array.isArray(extras.faq) ? extras.faq : [],

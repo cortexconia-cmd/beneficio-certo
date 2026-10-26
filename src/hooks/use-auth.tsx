@@ -46,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recoveryReady, setRecoveryReady] = useState(false);
+  const [verifiedWhatsApp, setVerifiedWhatsApp] = useState(false);
   const version = useRef(0);
   const profileReady = useRef<Promise<void>>(Promise.resolve());
   const recovery = useRef(false);
@@ -58,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const current = ++version.current;
       setSession(next);
       setProfile(null);
+      setVerifiedWhatsApp(false);
       setLoading(true);
       // Start profile I/O outside the synchronous Auth callback to avoid auth-lock races.
       profileReady.current = Promise.resolve().then(async () => {
@@ -67,6 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (result.error) throw result.error;
           if (alive && version.current === current) {
             setProfile(result.data);
+            const status = await supabase.functions.invoke("solvchat-otp", { body: { action: "status" } });
+            if (alive && version.current === current) setVerifiedWhatsApp(!status.error && status.data?.verified === true);
             setError(result.data ? null : "Seu perfil não foi encontrado. Não é possível editar seus dados.");
           }
         } catch {
@@ -107,24 +111,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(message);
     } finally { setLoading(false); }
   }
-  const sendPhoneCode: AuthState["sendPhoneCode"] = (number) => perform(async () => {
-    const checked = await supabase.auth.getUser();
-    if (checked.error || !checked.data.user) throw new Error("Entre na conta para confirmar o celular.");
-    const source = number || checked.data.user.user_metadata?.whatsapp || profile?.whatsapp;
-    if (!source) throw new Error("Celular não informado.");
-    const phone = "+" + normalizeWhatsapp(source);
-    const result = await supabase.auth.updateUser({ phone });
-    if (result.error) throw new Error("Falha ao enviar SMS. Verifique o provedor de SMS no Supabase.");
+  const sendPhoneCode: AuthState["sendPhoneCode"] = () => perform(async () => {
+    const result = await supabase.functions.invoke("solvchat-otp", { body: { action: "send" } });
+    if (result.error || !result.data?.sent) throw new Error(result.data?.error ?? "Não foi possível enviar o código pelo WhatsApp.");
   });
-  const verifyPhoneCode: AuthState["verifyPhoneCode"] = (number, code) => perform(async () => {
-    if (!/^\d{6,8}$/.test(code.trim())) throw new Error("Digite o código recebido.");
-    const phone = "+" + normalizeWhatsapp(number);
-    const result = await supabase.auth.verifyOtp({ phone, token: code.trim(), type: "phone_change" });
-    if (result.error) throw new Error("Código incorreto ou expirado.");
-    const checked = await supabase.auth.getUser();
-    if (checked.error || !checked.data.user?.phone_confirmed_at || checked.data.user.phone !== phone)
-      throw new Error("O número ainda não foi confirmado.");
-    setSession(old => old ? { ...old, user: checked.data.user! } : old);
+  const verifyPhoneCode: AuthState["verifyPhoneCode"] = (_number, code) => perform(async () => {
+    if (!/^\d{6}$/.test(code.trim())) throw new Error("Informe o código de 6 dígitos.");
+    const result = await supabase.functions.invoke("solvchat-otp", { body: { action: "verify", code: code.trim() } });
+    if (result.error || result.data?.verified !== true) throw new Error(result.data?.error ?? "Código inválido ou expirado.");
+    setVerifiedWhatsApp(true);
   });
   const login: AuthState["login"] = (email, password) => perform(async () => {
     const result = await supabase.auth.signInWithPassword({ email: email.trim(), password });
@@ -135,11 +130,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!name.trim()) throw new Error("Informe seu nome completo.");
     validatePassword(password);
     const phone = normalizeWhatsapp(whatsapp);
-    const result = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim(), whatsapp: phone } } });
-    if (result.error) throw new Error("Não foi possível cadastrar. Verifique os dados.");
-    if (!result.data.session) throw new Error("O Supabase ainda exige confirmação de e-mail. Desative essa exigência em Authentication > Providers > Email para usar SMS.");
-    const request = await supabase.auth.updateUser({ phone: "+" + phone });
-    if (request.error) throw new Error("Conta criada, mas o SMS não foi enviado. Configure o provedor SMS no Supabase.");
+    const result = await supabase.auth.signUp({
+      email: email.trim(), password,
+      options: { data: { full_name: name.trim(), whatsapp: phone } },
+    });
+    if (result.error) throw new Error("Não foi possível cadastrar. Verifique seus dados.");
+    if (!result.data.session) throw new Error("O Supabase ainda exige confirmação de e-mail. Para verificar pelo WhatsApp, configure Authentication > Providers > Email para não exigir confirmação.");
+    // Trigger on auth.users creates the profile; wait until it becomes visible.
+    const { data: profileAfterSignup, error: profileError } = await supabase.from("profiles")
+      .select("id").eq("id", result.data.user?.id ?? "").maybeSingle();
+    if (profileError || !profileAfterSignup) throw new Error("Conta criada, mas o perfil ainda não está disponível. Faça login novamente.");
+    const sent = await supabase.functions.invoke("solvchat-otp", { body: { action: "send" } });
+    if (sent.error || !sent.data?.sent) throw new Error(sent.data?.error ?? "Conta criada, mas não foi possível enviar a mensagem pelo SolvChat.");
     return true;
   });
   const resetPassword: AuthState["resetPassword"] = (email) => perform(async () => {
@@ -173,8 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     version.current++;
     setSession(null);
     setProfile(null);
+    setVerifiedWhatsApp(false);
   });
-  const phoneVerified = Boolean(session?.user.phone_confirmed_at && session.user.phone && profile?.whatsapp && session.user.phone === "+" + profile.whatsapp);
+  const phoneVerified = Boolean(session && verifiedWhatsApp);
   const user = session ? { id: session.user.id, name: profile?.full_name || session.user.email?.split("@")[0] || "Minha conta", email: session.user.email || "", whatsapp: profile?.whatsapp || "" } : null;
   return <AuthContext.Provider value={{ user, session, profile, loading, error, recoveryReady, phoneVerified, sendPhoneCode, verifyPhoneCode, login, signup, resetPassword, updatePassword, updateProfile, logout }}>{children}</AuthContext.Provider>;
 }

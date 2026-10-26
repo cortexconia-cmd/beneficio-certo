@@ -20,13 +20,14 @@ jobs:
         run: |
           (bun run dev -- --host 127.0.0.1 > /tmp/beneficio-debug.log 2>&1) &
           for i in $(seq 1 45); do
-            if curl -fsS http://127.0.0.1:3000/ -o /tmp/beneficio-response.html; then break; fi
+            if curl -fsS http://127.0.0.1:8080/ -o /tmp/beneficio-response.html; then break; fi
             sleep 2
           done
           echo "HTTP RESPONSE:"
-          curl -s -o /tmp/test-body -w 'HTTP %{http_code}\n' http://127.0.0.1:3000/ || true
+          curl -s -o /tmp/test-body -w 'HTTP %{http_code}\n' http://127.0.0.1:8080/ || true
           echo "HTML:"
           head -c 1200 /tmp/test-body || true
           echo "SERVER LOGS:"
           tail -n 170 /tmp/beneficio-debug.log || true
+          test -f /tmp/test-body
           ! grep -q "This page didn't load" /tmp/test-body

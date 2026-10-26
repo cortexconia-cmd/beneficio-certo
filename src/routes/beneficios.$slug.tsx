@@ -13,6 +13,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useBenefitAccess } from "@/hooks/use-benefit-access";
+import { PaymentPrompt } from "@/components/benefits/PaymentPrompt";
+import { LockKeyhole } from "lucide-react";
 
 export const Route = createFileRoute("/beneficios/$slug")({
   loader: ({ params }) => {
@@ -47,7 +53,51 @@ export const Route = createFileRoute("/beneficios/$slug")({
 });
 
 function BenefitPage() {
-  const { benefit } = Route.useLoaderData() as { benefit: Benefit };
+  const { benefit: meta } = Route.useLoaderData() as { benefit: Benefit };
+  const { user, canOpen, checking } = useBenefitAccess();
+  const locked = !canOpen(meta.slug);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const detail = useQuery({
+    queryKey: ["original-benefit-guide", user?.id, meta.slug],
+    enabled: !locked && !checking,
+    retry: false,
+    queryFn: async () => {
+      const slug = meta.slug === "bpc" ? "bpc-loas" : meta.slug;
+      const { data: found, error: lookupError } = await supabase.from("benefits")
+        .select("id").eq("slug", slug).eq("is_published", true).maybeSingle();
+      if (lookupError) throw lookupError;
+      if (!found) return null;
+      const { data, error } = await supabase.from("benefit_contents")
+        .select("what_is, who_qualifies, documents, how_to_apply, important")
+        .eq("benefit_id", found.id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const content = detail.data;
+  const extras = content?.important && !Array.isArray(content.important) && typeof content.important === "object" ?
+    content.important as { errosComuns?: Benefit["errosComuns"]; dicas?: string[]; faq?: Benefit["faq"] } : {};
+  const benefit: Benefit = {
+    ...meta,
+    oQueE: typeof content?.what_is === "string" ? content.what_is : "",
+    quemTemDireito: Array.isArray(content?.who_qualifies) ? content.who_qualifies.filter((x): x is string => typeof x === "string") : [],
+    documentos: Array.isArray(content?.documents) ? content.documents.filter((x): x is string => typeof x === "string") : [],
+    comoSolicitar: Array.isArray(content?.how_to_apply) ? content.how_to_apply as Benefit["comoSolicitar"] : [],
+    errosComuns: Array.isArray(extras.errosComuns) ? extras.errosComuns : [],
+    dicas: Array.isArray(extras.dicas) ? extras.dicas : [],
+    faq: Array.isArray(extras.faq) ? extras.faq : [],
+  };
+
+  if (checking || locked) return <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
+    <div className="mx-auto grid size-20 place-items-center rounded-2xl bg-primary-soft text-primary"><LockKeyhole className="size-10"/></div>
+    <h1 className="text-3xl font-bold">{meta.nome}</h1>
+    <p className="text-muted-foreground">{checking ? "Verificando o acesso…" : "Este guia faz parte do conteúdo exclusivo. Os benefícios do governo podem ser solicitados gratuitamente pelos canais oficiais."}</p>
+    {!checking && <button className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground" onClick={() => setPaymentOpen(true)}>{user ? "Desbloquear guia" : "Criar conta para desbloquear"}</button>}
+    <div><Link to="/beneficios" className="text-primary underline">Voltar ao catálogo</Link></div>
+    <PaymentPrompt open={paymentOpen} onOpenChange={setPaymentOpen} benefitName={meta.nome} />
+  </div>;
+  if (detail.isPending) return <div role="status" className="mx-auto max-w-3xl px-4 py-20 text-muted-foreground">Carregando orientações…</div>;
+  if (detail.isError || !content) return <div role="alert" className="mx-auto max-w-3xl px-4 py-20 text-destructive">Não foi possível carregar o conteúdo. Tente novamente ou procure o suporte.</div>;
   const category = getCategory(benefit.categoria);
   const Icon = category
     ? (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[category.icon] ?? Icons.Circle

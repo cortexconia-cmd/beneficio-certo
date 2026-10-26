@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+
 import { useAuth } from "@/hooks/use-auth";
 import {
   Dialog,
@@ -21,7 +21,7 @@ interface Props {
 }
 
 export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Props) {
-  const { login, signup, resetPassword, sendPhoneCode, verifyPhoneCode, loading } = useAuth();
+  const { login, signup, resetPassword, sendPhoneCode, verifyPhoneCode, loading, phoneVerified, user } = useAuth();
   const [mode, setMode] = useState<"entrar" | "cadastrar" | "recuperar" | "verificar">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -49,12 +49,12 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
             if (loading) return;
             setError(""); setSuccess("");
             try {
-              if (mode === "entrar") { await login(email, password); setPassword(""); const verified = await supabase.auth.getUser(); if (!verified.data.user?.phone_confirmed_at) setMode("verificar"); else onOpenChange(false); }
+              if (mode === "entrar") { await login(email, password); setPassword(""); if (!phoneVerified) { setWhatsapp(user?.whatsapp || whatsapp); setMode("verificar"); } else onOpenChange(false); }
               else if (mode === "cadastrar") {
                 const confirm = await signup(name, whatsapp, email, password);
                 setPassword("");
                 setMode("verificar");
-                setSuccess(confirm ? "Enviamos um código SMS ao celular informado." : "Digite o código SMS para confirmar seu celular.");
+                setSuccess(confirm ? "Enviamos um código de confirmação pelo WhatsApp." : "Digite o código enviado pelo WhatsApp.");
               } else if (mode === "verificar") {
                 await verifyPhoneCode(whatsapp, code);
                 setSuccess("Celular confirmado. Sua conta está pronta.");
@@ -94,8 +94,8 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
           </div>}
           {mode === "verificar" && <>
             <div className="space-y-2"><Label htmlFor="sms-phone">Número do celular com DDD</Label><Input id="sms-phone" type="tel" required value={whatsapp} autoComplete="tel" onChange={e => setWhatsapp(e.target.value)} placeholder="(11) 99999-9999" /></div>
-            <div className="space-y-2"><Label htmlFor="sms-code">Código recebido por SMS</Label><Input id="sms-code" required inputMode="numeric" autoComplete="one-time-code" maxLength={8} pattern="[0-9]{6,8}" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" /></div>
-            <Button type="button" variant="outline" className="w-full" disabled={loading} onClick={async () => { setError(""); setSuccess(""); try { await sendPhoneCode(whatsapp); setSuccess("Novo código SMS solicitado."); } catch (e) { setError(e instanceof Error ? e.message : "Falha ao reenviar SMS."); } }}>Reenviar código SMS</Button>
+            <div className="space-y-2"><Label htmlFor="sms-code">Código recebido no WhatsApp</Label><Input id="sms-code" required inputMode="numeric" autoComplete="one-time-code" maxLength={8} pattern="[0-9]{6,8}" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" /></div>
+            <Button type="button" variant="outline" className="w-full" disabled={loading} onClick={async () => { setError(""); setSuccess(""); try { await sendPhoneCode(whatsapp); setSuccess("Novo código solicitado pelo WhatsApp."); } catch (e) { setError(e instanceof Error ? e.message : "Falha ao reenviar SMS."); } }}>Reenviar código pelo WhatsApp</Button>
           </>}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           {success && <p role="status" className="text-sm text-primary">{success}</p>}

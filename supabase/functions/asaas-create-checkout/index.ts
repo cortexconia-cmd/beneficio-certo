@@ -20,6 +20,7 @@ Deno.serve(async req => {
   const { data: identity, error: authError } = await db.auth.getUser(token);
   const user = identity.user;
   if (authError || !user || !user.email) return answer({ error: "Sessão inválida" }, 401, allowed);
+  if (!user.phone_confirmed_at || !user.phone) return answer({ error: "Confirme seu celular por SMS antes de comprar." }, 403, allowed);
   const { data: grants } = await db.from("access_grants").select("id,starts_at,expires_at,revoked_at").eq("user_id", user.id).eq("access_scope", "catalog");
   if (grants?.some(g => !g.revoked_at && Date.parse(g.starts_at) <= Date.now() && (!g.expires_at || Date.parse(g.expires_at) > Date.now()))) return answer({ error: "Seu acesso já está liberado" }, 409, allowed);
   // Reuse a still-pending checkout if one exists.

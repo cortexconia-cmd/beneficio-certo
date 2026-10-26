@@ -1,0 +1,98 @@
+import { createClient } from "npm:@supabase/supabase-js@2.57.0";
+const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {auth:{persistSession:false,autoRefreshToken:false}});
+const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{"cache-control":"no-store"}});
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+type Params={action?:string;period?:number;page?:number;search?:string;id?:string;status?:string;payload?:Record<string,unknown>;cents?:number;userId?:string;decision?:string;reason?:string;expiry?:string|null};
+async function paged(table:"profiles"|"orders"|"audit_logs",fields:string,page:number,search:string,orderColumn="created_at"){
+  let query=db.from(table).select(fields,{count:"exact"}).order(orderColumn,{ascending:false}).range(page*30,page*30+29);
+  if(search && table==="profiles")query=query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,whatsapp.ilike.%${search}%`);
+  if(search && table==="orders")query=query.ilike("order_number",`%${search}%`);
+  const {data,error,count}=await query;
+  if(error)throw error;return {rows:data??[],total:count??0,page};
+}
+Deno.serve(async req=>{
+  if(req.method!=="POST")return reply({error:"Método não permitido"},405);
+  const bearer=req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if(!bearer)return reply({error:"Autenticação necessária"},401);
+  const {data:identity,error:identityError}=await db.auth.getUser(bearer);
+  if(identityError||!identity.user)return reply({error:"Sessão inválida"},401);
+  const actor=identity.user.id;
+  const {data:role,error:roleError}=await db.from("user_roles").select("user_id").eq("user_id",actor).eq("role","admin").maybeSingle();
+  if(roleError)return reply({error:"Falha na verificação de acesso"},500);
+  if(!role)return reply({error:"Acesso reservado aos administradores"},403);
+  let input:Params;
+  try{input=await req.json()}catch{return reply({error:"Requisição inválida"},400)}
+  const action=input.action??"";
+  const allowed=["overview","users","orders","benefits","categories","acquisition","audit","setting","save-benefit","save-price","manual-access"];
+  if(!allowed.includes(action))return reply({error:"Ação não permitida"},400);
+  const page=Math.max(0,Math.min(10000,Number.isInteger(input.page)?input.page!:0));
+  const search=typeof input.search==="string"?input.search.trim().slice(0,90).replace(/[,()]/g,""):"";
+  const period=[7,30,90,365].includes(input.period??30)?input.period!:30;
+  const since=new Date(Date.now()-period*86400000).toISOString();
+  try{
+    if(action==="overview"){
+      const {data,error}=await db.rpc("admin_dashboard_stats",{p_since:since});
+      if(error)throw error;
+      return reply({data});
+    }
+    if(action==="acquisition"){
+      const {data,error}=await db.rpc("admin_acquisition_report",{p_since:since});
+      if(error)throw error;return reply({data});
+    }
+    if(action==="users"){
+      // Only 30 users per request. Verify access and recent paid orders through service-only lookups.
+      const people=await paged("profiles","id,full_name,email,whatsapp,created_at",page,search);
+      const ids=(people.rows as {id:string}[]).map(x=>x.id);
+      if(!ids.length)return reply({...people,grants:[],orders:[],verified:[]});
+      const [grants,orders,verified]=await Promise.all([
+        db.from("access_grants").select("user_id,access_scope,starts_at,expires_at,revoked_at,order_id").in("user_id",ids),
+        db.from("orders").select("user_id,status,amount_cents,created_at").in("user_id",ids).order("created_at",{ascending:false}).limit(300),
+        db.from("phone_verifications").select("user_id,verified_at").in("user_id",ids)
+      ]);
+      if(grants.error||orders.error||verified.error)throw new Error("Falha ao consultar o status dos usuários");
+      return reply({...people,grants:grants.data,orders:orders.data,verified:verified.data});
+    }
+    if(action==="orders"){
+      let query=db.from("orders").select("id,order_number,user_id,amount_cents,status,external_checkout_id,created_at,updated_at",{count:"exact"}).order("created_at",{ascending:false}).range(page*30,page*30+29);
+      if(input.status&&["pending","checkout_created","paid","cancelled","expired","refunded","chargeback"].includes(input.status))query=query.eq("status",input.status);
+      if(search)query=query.ilike("order_number",`%${search}%`);
+      const {data,error,count}=await query;if(error)throw error;
+      const ids=[...new Set((data??[]).map(row=>row.user_id))];
+      const profiles=ids.length?await db.from("profiles").select("id,full_name,email,whatsapp").in("id",ids):{data:[],error:null};
+      if(profiles.error)throw profiles.error;
+      return reply({rows:data??[],profiles:profiles.data??[],total:count??0,page});
+    }
+    if(action==="categories"){
+      const {data,error}=await db.from("categories").select("id,slug,name,description,is_active,sort_order").order("sort_order");
+      if(error)throw error;return reply({data});
+    }
+    if(action==="benefits"){
+      const {data,error}=await db.from("benefits").select("id,slug,name,short_description,category_id,is_published,sort_order,benefit_contents(what_is,who_qualifies,value_info,how_to_apply,documents,important,is_restricted)").order("sort_order");
+      if(error)throw error;return reply({data});
+    }
+    if(action==="audit"){
+      return reply(await paged("audit_logs","id,actor_user_id,action,entity_type,entity_id,changes,created_at",page,""));
+    }
+    if(action==="setting"){
+      const {data,error}=await db.from("platform_settings").select("value").eq("key","catalog_price_cents").maybeSingle();
+      if(error)throw error;return reply({data:{priceCents:data?.value??null}});
+    }
+    if(action==="save-benefit"){
+      if(!input.id||!uuid.test(input.id)||!input.payload)return reply({error:"Benefício inválido"},400);
+      const {data,error}=await db.rpc("admin_save_benefit",{p_actor:actor,p_benefit:input.id,p_payload:input.payload});
+      if(error)throw error;return reply({success:data});
+    }
+    if(action==="save-price"){
+      if(!Number.isInteger(input.cents)||input.cents!<100||input.cents!>100000)return reply({error:"Preço inválido"},400);
+      const {data,error}=await db.rpc("admin_update_price",{p_actor:actor,p_cents:input.cents});
+      if(error)throw error;return reply({success:data});
+    }
+    if(action==="manual-access"){
+      if(!input.userId||!uuid.test(input.userId)||!["grant","revoke"].includes(input.decision??"")||!input.reason)return reply({error:"Solicitação incompleta"},400);
+      const expiry=input.expiry&&typeof input.expiry==="string"?new Date(input.expiry).toISOString():null;
+      const {data,error}=await db.rpc("admin_manual_access",{p_actor:actor,p_user:input.userId,p_action:input.decision,p_reason:input.reason,p_expiry:expiry});
+      if(error)throw error;return reply({success:data,changed:data});
+    }
+    return reply({error:"Ação inválida"},400);
+  }catch(e){console.error("admin operation failed",action,e instanceof Error?e.message:"error");return reply({error:"Não foi possível concluir a operação. Verifique os campos ou tente novamente."},500)}
+});

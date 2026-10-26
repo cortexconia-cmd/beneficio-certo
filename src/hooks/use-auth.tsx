@@ -28,6 +28,9 @@ interface AuthState {
   loading: boolean;
   error: string | null;
   recoveryReady: boolean;
+  phoneVerified: boolean;
+  sendPhoneCode: (number?: string) => Promise<void>;
+  verifyPhoneCode: (number: string, code: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, whatsapp: string, email: string, password: string) => Promise<boolean>;
   resetPassword: (email: string) => Promise<void>;
@@ -104,17 +107,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(message);
     } finally { setLoading(false); }
   }
+  const sendPhoneCode: AuthState["sendPhoneCode"] = (number) => perform(async () => {
+    const checked = await supabase.auth.getUser();
+    if (checked.error || !checked.data.user) throw new Error("Entre na conta para confirmar o celular.");
+    const source = number || checked.data.user.user_metadata?.whatsapp || profile?.whatsapp;
+    if (!source) throw new Error("Celular não informado.");
+    const phone = "+" + normalizeWhatsapp(source);
+    const result = await supabase.auth.updateUser({ phone });
+    if (result.error) throw new Error("Falha ao enviar SMS. Verifique o provedor de SMS no Supabase.");
+  });
+  const verifyPhoneCode: AuthState["verifyPhoneCode"] = (number, code) => perform(async () => {
+    if (!/^\d{6,8}$/.test(code.trim())) throw new Error("Digite o código recebido.");
+    const phone = "+" + normalizeWhatsapp(number);
+    const result = await supabase.auth.verifyOtp({ phone, token: code.trim(), type: "phone_change" });
+    if (result.error) throw new Error("Código incorreto ou expirado.");
+    const checked = await supabase.auth.getUser();
+    if (checked.error || !checked.data.user?.phone_confirmed_at || checked.data.user.phone !== phone)
+      throw new Error("O número ainda não foi confirmado.");
+    setSession(old => old ? { ...old, user: checked.data.user! } : old);
+  });
   const login: AuthState["login"] = (email, password) => perform(async () => {
     const result = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (result.error) throw new Error("Não foi possível entrar. Verifique e-mail, senha e confirmação do e-mail.");
+    if (result.error) throw new Error("Não foi possível entrar. Verifique seu e-mail e senha.");
     await profileReady.current;
   });
   const signup: AuthState["signup"] = (name, whatsapp, email, password) => perform(async () => {
     if (!name.trim()) throw new Error("Informe seu nome completo.");
     validatePassword(password);
-    const result = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim(), whatsapp: normalizeWhatsapp(whatsapp) }, emailRedirectTo: `${window.location.origin}/minha-conta` } });
-    if (result.error) throw new Error("Não foi possível cadastrar. Verifique seus dados e tente novamente.");
-    return result.data.session === null;
+    const phone = normalizeWhatsapp(whatsapp);
+    const result = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim(), whatsapp: phone } } });
+    if (result.error) throw new Error("Não foi possível cadastrar. Verifique os dados.");
+    if (!result.data.session) throw new Error("O Supabase ainda exige confirmação de e-mail. Desative essa exigência em Authentication > Providers > Email para usar SMS.");
+    const request = await supabase.auth.updateUser({ phone: "+" + phone });
+    if (request.error) throw new Error("Conta criada, mas o SMS não foi enviado. Configure o provedor SMS no Supabase.");
+    return true;
   });
   const resetPassword: AuthState["resetPassword"] = (email) => perform(async () => {
     const result = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/redefinir-senha` });
@@ -148,8 +174,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setProfile(null);
   });
+  const phoneVerified = Boolean(session?.user.phone_confirmed_at);
   const user = session ? { id: session.user.id, name: profile?.full_name || session.user.email?.split("@")[0] || "Minha conta", email: session.user.email || "", whatsapp: profile?.whatsapp || "" } : null;
-  return <AuthContext.Provider value={{ user, session, profile, loading, error, recoveryReady, login, signup, resetPassword, updatePassword, updateProfile, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, session, profile, loading, error, recoveryReady, phoneVerified, sendPhoneCode, verifyPhoneCode, login, signup, resetPassword, updatePassword, updateProfile, logout }}>{children}</AuthContext.Provider>;
 }
 export function useAuth() {
   const context = useContext(AuthContext);

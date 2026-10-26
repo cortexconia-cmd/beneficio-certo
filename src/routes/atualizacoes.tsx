@@ -1,65 +1,76 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Calendar, AlertCircle, Sparkles, FileEdit } from "lucide-react";
+import { Sparkles, Calendar, RefreshCw, ShieldAlert, ArrowRight } from "lucide-react";
 import { updates } from "@/data/updates";
-import { Badge } from "@/components/ui/badge";
-
-const typeConfig = {
-  "nova-regra": { label: "Nova regra", icon: FileEdit, className: "bg-blue-100 text-blue-700" },
-  "calendario": { label: "Calendário", icon: Calendar, className: "bg-violet-100 text-violet-700" },
-  "aviso": { label: "Aviso", icon: AlertCircle, className: "bg-amber-100 text-amber-700" },
-  "novo-beneficio": { label: "Novo benefício", icon: Sparkles, className: "bg-emerald-100 text-emerald-700" },
-};
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/atualizacoes")({
   head: () => ({
     meta: [
-      { title: "Atualizações — Projeto+Benefícios" },
-      { name: "description", content: "Mudanças em benefícios, novas regras, calendário e avisos importantes." },
-      { property: "og:title", content: "Atualizações — Projeto+Benefícios" },
-      { property: "og:description", content: "Mudanças em benefícios, novas regras, calendário e avisos importantes." },
-      { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
+      { title: "Atualizações — Projeto + Benefícios" },
+      { name: "description", content: "Novidades, mudanças, calendários e avisos importantes sobre benefícios do governo." },
     ],
   }),
   component: UpdatesPage,
 });
 
+const tipoMap = {
+  novidade: { label: "Novidade", icon: Sparkles, color: "bg-blue-50 text-blue-700 border-blue-200" },
+  mudanca: { label: "Mudança", icon: RefreshCw, color: "bg-purple-50 text-purple-700 border-purple-200" },
+  calendario: { label: "Calendário", icon: Calendar, color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  alerta: { label: "Alerta", icon: ShieldAlert, color: "bg-amber-50 text-amber-800 border-amber-200" },
+} as const;
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function UpdatesPage() {
   return (
-    <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10 animate-[fade-in_0.4s_ease-out]">
-      <div className="mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Atualizações</h1>
-        <p className="text-muted-foreground mt-2">Mudanças em benefícios, novas regras e avisos importantes.</p>
-      </div>
+    <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 sm:py-10 md:py-14">
+      <header className="mb-6 sm:mb-10">
+        <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">Atualizações</h1>
+        <p className="mt-1 sm:mt-2 text-sm sm:text-base text-muted-foreground">
+          Acompanhe novidades, mudanças e avisos importantes sobre benefícios.
+        </p>
+      </header>
 
-      <div className="space-y-4">
+      <div className="grid gap-4">
         {updates.map((u) => {
-          const cfg = typeConfig[u.type];
-          const Icon = cfg.icon;
+          const meta = tipoMap[u.tipo];
+          const Icon = meta.icon;
           return (
             <article
               key={u.id}
-              className="rounded-2xl border border-border bg-card p-6 shadow-card hover-lift"
+              className="rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-soft transition hover:-translate-y-0.5 hover:shadow-card-hover"
             >
-              <div className="flex flex-wrap items-center gap-3 mb-3">
-                <Badge className={`gap-1.5 border-0 ${cfg.className}`}>
-                  <Icon className="size-3.5" />
-                  {cfg.label}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(u.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
-                </span>
+              <div className="flex items-start gap-4">
+                <div className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl border", meta.color)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className={cn("rounded-full border px-2 py-0.5 font-medium", meta.color)}>
+                      {meta.label}
+                    </span>
+                    <span className="text-muted-foreground">{formatDate(u.data)}</span>
+                  </div>
+                  <h2 className="mt-2 text-lg font-semibold">{u.titulo}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{u.resumo}</p>
+                  {u.beneficioSlug && (
+                    <Link
+                      to="/beneficios/$slug"
+                      params={{ slug: u.beneficioSlug }}
+                      className="mt-3 inline-flex items-center text-sm font-medium text-primary hover:gap-2 gap-1 transition-all"
+                    >
+                      Ver benefício <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  )}
+                </div>
               </div>
-              <h2 className="text-xl font-semibold">{u.title}</h2>
-              <p className="text-muted-foreground mt-2">{u.summary}</p>
-              {u.benefitSlug && (
-                <Link
-                  to="/beneficios/$slug"
-                  params={{ slug: u.benefitSlug }}
-                  className="inline-flex items-center mt-4 text-sm font-medium text-primary hover:underline"
-                >
-                  Ver benefício relacionado →
-                </Link>
-              )}
             </article>
           );
         })}

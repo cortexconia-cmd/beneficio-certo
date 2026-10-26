@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
-export const FREE_BENEFIT_SLUGS = new Set(["bolsa-familia", "auxilio-gas", "bpc-loas"]);
-export function isFreeBenefit(slug: string): boolean { return FREE_BENEFIT_SLUGS.has(slug); }
+export const FREE_BENEFIT_SLUGS = new Set(["bolsa-familia", "auxilio-gas", "bpc"]);
+export function isFreeBenefit(slug: string): boolean { return FREE_BENEFIT_SLUGS.has(slug) || slug === "bpc-loas"; }
 
 export function useBenefitAccess() {
   const { user, phoneVerified, loading: authLoading } = useAuth();

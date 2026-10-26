@@ -12,6 +12,7 @@ import appCss from "../styles.css?url";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { AuthProvider } from "@/hooks/use-auth";
 
 function NotFoundComponent() {
   return (
@@ -84,8 +85,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "Projeto + Benefícios — Catálogo de benefícios do governo" },
       { name: "twitter:description", content: "Catálogo digital com explicações simples sobre os principais benefícios do governo brasileiro em 2026." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/73cfaa7c-7e6f-4003-b8d4-5fd4246aa4c8/id-preview-513cb661--4d5cd625-824a-4908-b54a-76c6cb0048c0.lovable.app-1779076200926.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/73cfaa7c-7e6f-4003-b8d4-5fd4246aa4c8/id-preview-513cb661--4d5cd625-824a-4908-b54a-76c6cb0048c0.lovable.app-1779076200926.png" },
+
     ],
     links: [
       {
@@ -102,7 +102,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <head>
         <HeadContent />
       </head>
@@ -119,6 +119,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthProvider>
       <div className="flex min-h-screen flex-col">
         <Header />
         <main className="flex-1 pb-20 lg:pb-0">
@@ -129,6 +130,7 @@ function RootComponent() {
         </div>
         <MobileBottomNav />
       </div>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

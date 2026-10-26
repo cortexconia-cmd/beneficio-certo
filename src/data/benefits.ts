@@ -2,7 +2,7 @@ import type { Benefit } from "@/types/benefit";
 /** Public catalogue metadata derived from the original Seu Guia de Benefícios.
  * Detailed instructions belong only in Supabase benefit_contents and are read under RLS.
  * The source benefit artwork must be imported separately as lossless binary assets. */
-export const benefits: Benefit[] = [
+const publicBenefits: Benefit[] = [
   {
     "id": "1",
     "slug": "bolsa-familia",
@@ -612,6 +612,11 @@ export const benefits: Benefit[] = [
     "faq": []
   }
 ];
+const artwork = import.meta.glob("/src/assets/benefits/*.png", { eager: true, query: "?url", import: "default" }) as Record<string, string>;
+export const benefits: Benefit[] = publicBenefits.map(b => ({
+  ...b,
+  imagem: artwork[`/src/assets/benefits/${b.slug}.png`] ?? undefined,
+}));
 export const getBenefit = (slug: string) => benefits.find(b => b.slug === slug);
 export const getBenefitsByCategory = (slug: string) => benefits.filter(b => b.categoria === slug);
 export function searchBenefits(query: string) {

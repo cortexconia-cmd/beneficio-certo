@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.0";
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {auth:{persistSession:false,autoRefreshToken:false}});
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{"cache-control":"no-store"}});
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-type Params={action?:string;period?:number;page?:number;search?:string;id?:string;status?:string;payload?:Record<string,unknown>;cents?:number;userId?:string;decision?:string;reason?:string;expiry?:string|null};
+type Params={action?:string;period?:number;page?:number;search?:string;id?:string;status?:string;payload?:Record<string,unknown>;cents?:number;userId?:string;decision?:string;reason?:string;expiry?:string|null;email?:string;staffRole?:string;reason?:string;targetUserId?:string};
 async function paged(table:"profiles"|"orders"|"audit_logs",fields:string,page:number,search:string,orderColumn="created_at"){
   let query=db.from(table).select(fields,{count:"exact"}).order(orderColumn,{ascending:false}).range(page*30,page*30+29);
   if(search && table==="profiles")query=query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,whatsapp.ilike.%${search}%`);
@@ -17,19 +17,83 @@ Deno.serve(async req=>{
   const {data:identity,error:identityError}=await db.auth.getUser(bearer);
   if(identityError||!identity.user)return reply({error:"Sessão inválida"},401);
   const actor=identity.user.id;
-  const {data:role,error:roleError}=await db.from("user_roles").select("user_id").eq("user_id",actor).eq("role","admin").maybeSingle();
+  if(!identity.user.email_confirmed_at)return reply({error:"Confirme seu e-mail para acessar a administração"},403);
+  const {data:roles,error:roleError}=await db.from("user_roles").select("role").eq("user_id",actor).in("role",["admin","admin_master"]);
   if(roleError)return reply({error:"Falha na verificação de acesso"},500);
-  if(!role)return reply({error:"Acesso reservado aos administradores"},403);
+  const isMaster=Boolean(roles?.some(r=>r.role==="admin_master"));
+  const canAdmin=Boolean(roles?.some(r=>r.role==="admin"||r.role==="admin_master"));
+  if(!canAdmin)return reply({error:"Acesso reservado aos administradores"},403);
   let input:Params;
   try{input=await req.json()}catch{return reply({error:"Requisição inválida"},400)}
   const action=input.action??"";
-  const allowed=["overview","users","orders","benefits","categories","acquisition","audit","setting","save-benefit","save-price","manual-access"];
+  const allowed=["overview","users","orders","benefits","categories","acquisition","audit","setting","save-benefit","save-price","manual-access","staff-list","staff-invite","staff-role"];
   if(!allowed.includes(action))return reply({error:"Ação não permitida"},400);
   const page=Math.max(0,Math.min(10000,Number.isInteger(input.page)?input.page!:0));
   const search=typeof input.search==="string"?input.search.trim().slice(0,90).replace(/[,()]/g,""):"";
   const period=[7,30,90,365].includes(input.period??30)?input.period!:30;
   const since=new Date(Date.now()-period*86400000).toISOString();
   try{
+    if(action==="staff-list"){
+      if(!isMaster)return reply({error:"Somente AdminMaster"},403);
+      const {data:members,error:membersError}=await db.from("user_roles").select("user_id,role,created_at").in("role",["admin","admin_master"]).order("created_at");
+      if(membersError)throw membersError;
+      const uniqueIds=[...new Set((members??[]).map(m=>m.user_id))].slice(0,250);
+      const {data:profiles,error:profileError}=uniqueIds.length?await db.from("profiles").select("id,full_name,email,created_at").in("id",uniqueIds):{data:[],error:null};
+      if(profileError)throw profileError;
+      const result=await Promise.all(uniqueIds.map(async id=>{
+        const {data,error}=await db.auth.admin.getUserById(id);
+        if(error)throw error;
+        return {id,email:data.user.email??"",confirmed:Boolean(data.user.email_confirmed_at),name:profiles?.find(p=>p.id===id)?.full_name??"",
+          role:members?.some(m=>m.user_id===id&&m.role==="admin_master")?"admin_master":"admin"};
+      }));
+      return reply({data:result});
+    }
+    if(action==="staff-role"){
+      if(!isMaster)return reply({error:"Somente AdminMaster"},403);
+      if(!input.targetUserId||!uuid.test(input.targetUserId)||!["admin","admin_master","none"].includes(input.staffRole??""))
+        return reply({error:"Conta ou cargo inválido"},400);
+      if(input.targetUserId===actor)return reply({error:"Você não pode alterar seu próprio cargo"},400);
+      const reason=typeof input.reason==="string"?input.reason.trim():"";
+      if(reason.length<8||reason.length>500)return reply({error:"Justificativa de 8 a 500 caracteres é obrigatória"},400);
+      const {data:changed,error:changeError}=await db.rpc("admin_set_staff_role",
+        {p_actor:actor,p_target:input.targetUserId,p_role:input.staffRole,p_reason:reason});
+      if(changeError)throw changeError;
+      return reply({success:changed});
+    }
+    if(action==="staff-invite"){
+      if(!isMaster)return reply({error:"Somente AdminMaster"},403);
+      const email=typeof input.email==="string"?input.email.trim().toLowerCase():"";
+      if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)||email.length>250||
+        !["admin","admin_master"].includes(input.staffRole??""))return reply({error:"E-mail ou cargo inválido"},400);
+      const appUrl=Deno.env.get("APP_URL");
+      if(!appUrl)return reply({error:"Configure APP_URL nos secrets do Supabase antes de convidar"},503);
+      let redirect:URL;
+      try{redirect=new URL(appUrl)}catch{return reply({error:"APP_URL inválida"},503)}
+      if(redirect.protocol!=="https:"||redirect.username||redirect.password)return reply({error:"APP_URL deve ser HTTPS"},503);
+      const {count,error:limitError}=await db.from("audit_logs").select("id",{count:"exact",head:true})
+        .eq("actor_user_id",actor).eq("action","admin_staff_invited")
+        .gte("created_at",new Date(Date.now()-86400000).toISOString());
+      if(limitError)throw limitError;
+      if((count??0)>=20)return reply({error:"Limite diário de 20 convites atingido"},429);
+      const {data:invited,error:inviteError}=await db.auth.admin.inviteUserByEmail(email,{
+        redirectTo:redirect.origin+"/ativar-conta"
+      });
+      if(inviteError||!invited.user)return reply({error:"Não foi possível enviar o convite. Se a pessoa já tem conta, utilize a lista de usuários para promover o cadastro existente."},409);
+      const uid=invited.user.id;
+      const {data:assigned,error:assignError}=await db.rpc("admin_set_staff_role",{
+        p_actor:actor,p_target:uid,p_role:input.staffRole,
+        p_reason:"Conta administrativa convidada pelo painel"});
+      if(assignError||!assigned){
+        console.error("invitation role assignment failed",uid,assignError?.message);
+        return reply({error:"O convite foi criado, mas a atribuição de cargo falhou. Não envie outro convite sem verificar a equipe."},500);
+      }
+      const {error:auditError}=await db.from("audit_logs").insert({
+        actor_user_id:actor,action:"admin_staff_invited",entity_type:"user",entity_id:uid,
+        changes:{email,role:input.staffRole}
+      });
+      if(auditError)console.error("invite audit failed",uid,auditError.message);
+      return reply({success:true,email,role:input.staffRole});
+    }
     if(action==="overview"){
       const {data,error}=await db.rpc("admin_dashboard_stats",{p_since:since});
       if(error)throw error;

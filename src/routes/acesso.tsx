@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, LockKeyhole, BookOpen, Search, Smartphone, ShieldCheck, ArrowRight, CircleHelp, CreditCard } from "lucide-react";
 import { LoginDialog } from "@/components/layout/LoginDialog";
 import { PaymentPrompt } from "@/components/benefits/PaymentPrompt";
@@ -20,6 +21,8 @@ export const Route=createFileRoute("/acesso")({
 function SalesPage(){
  const {user,phoneVerified}=useAuth();
  const {hasCatalog}=useBenefitAccess();
+ const [price,setPrice]=useState<number|null>(null);
+ useEffect(()=>{let alive=true;void supabase.functions.invoke("public-analytics",{body:{action:"config"}}).then(({data,error})=>{if(alive&&!error&&Number.isSafeInteger(data?.priceCents))setPrice(data.priceCents)});return ()=>{alive=false}},[]);
  const [loginOpen,setLoginOpen]=useState(false);
  const [checkoutOpen,setCheckoutOpen]=useState(false);
  const start=()=>{
@@ -45,7 +48,7 @@ function SalesPage(){
        ["Orientações detalhadas","Entenda requisitos, documentos e etapas informativas."],
        ["Acesso centralizado","Consulte seus guias quando precisar, pelo celular ou computador."]
      ].map(([title,desc])=><div key={title} className="flex gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary"/><div><p className="font-semibold">{title}</p><p className="text-sm text-muted-foreground">{desc}</p></div></div>)}</div>
-     <div className="rounded-2xl bg-secondary p-5"><p className="text-sm text-muted-foreground">Acesso digital completo — pagamento único</p><p className="mt-1 text-4xl font-bold">R$ 29,90</p><p className="mt-2 text-xs text-muted-foreground">Valor de referência da oferta. O preço final será confirmado antes do pagamento no checkout.</p></div>
+     <div className="rounded-2xl bg-secondary p-5"><p className="text-sm text-muted-foreground">Acesso digital completo — pagamento único</p><p className="mt-1 text-4xl font-bold">{price===null?"Consultando preço…":new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(price/100)}</p><p className="mt-2 text-xs text-muted-foreground">Valor de referência da oferta. O preço final será confirmado antes do pagamento no checkout.</p></div>
      <Button className="mt-4 w-full" size="lg" onClick={start}>{hasCatalog?"Acessar meus guias":"Quero acessar os guias"}</Button>
      <p className="mt-3 text-center text-xs text-muted-foreground">Pix e cartão pelo Asaas após cadastro e confirmação.</p>
    </div>

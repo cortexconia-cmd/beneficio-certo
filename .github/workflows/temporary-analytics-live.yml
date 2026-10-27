@@ -1,0 +1,22 @@
+name: Teste externo temporário do analytics
+on:
+  push:
+    branches: [test/public-analytics-live]
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar configuração pública e gravação de visita de teste
+        shell: bash
+        run: |
+          set -euo pipefail
+          url=https://kyphgokrlvojxsngoysf.supabase.co/functions/v1/public-analytics
+          curl -fsS --max-time 20 -X POST "$url" -H 'Origin: https://beneficio-compass-guide.lovable.app' -H 'Content-Type: application/json' -d '{"action":"config"}' -o /tmp/config.json
+          cat /tmp/config.json
+          grep -q '"priceCents"' /tmp/config.json
+          curl -fsS --max-time 20 -X POST "$url" -H 'Origin: https://beneficio-compass-guide.lovable.app' -H 'Content-Type: application/json' -d '{"action":"visit","consent_analytics":true,"consent_marketing":false,"visitor_id":"d47a852b-b3d0-4a1f-98ee-b196bc817e30","session_id":"fc1bbd67-5143-4f55-8eb6-6242f3664a35","path":"/acesso"}' -o /tmp/visit.json
+          cat /tmp/visit.json
+          grep -q '"ok":true' /tmp/visit.json
+          curl -fsS --max-time 20 -X POST "$url" -H 'Origin: https://beneficio-compass-guide.lovable.app' -H 'Content-Type: application/json' -d '{"action":"event","consent_analytics":true,"consent_marketing":false,"visitor_id":"d47a852b-b3d0-4a1f-98ee-b196bc817e30","session_id":"fc1bbd67-5143-4f55-8eb6-6242f3664a35","event_name":"PageView","event_id":"dbab487e-1bc0-4588-b4a1-8d340d225e81","path":"/acesso"}' -o /tmp/event.json
+          cat /tmp/event.json
+          grep -q '"ok":true' /tmp/event.json

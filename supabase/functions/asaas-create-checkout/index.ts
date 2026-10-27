@@ -1,4 +1,6 @@
-// Supabase Edge Function. Secrets: ASAAS_API_KEY, ASAAS_ENV (sandbox|production), APP_URL.
+// Supabase Edge Function. Prefers authenticated n8n checkout when configured.
+// Secrets: N8N_ASAAS_CHECKOUT_URL, N8N_ASAAS_CHECKOUT_TOKEN, APP_URL.
+// Legacy direct Asaas checkout is supported only if n8n is not configured.
 import { createClient } from "npm:@supabase/supabase-js@2.57.0";
 const url = Deno.env.get("SUPABASE_URL")!;
 const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -13,8 +15,18 @@ Deno.serve(async req => {
   const allowed = origins.has(origin) ? origin : "";
   if (req.method === "OPTIONS") return new Response(null, { status: allowed ? 204 : 403, headers: allowed ? { "access-control-allow-origin": allowed, "access-control-allow-headers": "authorization, apikey, content-type", "access-control-allow-methods": "POST, OPTIONS" } : {} });
   if (req.method !== "POST" || !allowed) return answer({ error: "Origem ou método inválido" }, 403, allowed);
+  const n8nUrl = Deno.env.get("N8N_ASAAS_CHECKOUT_URL")?.trim();
+  const n8nToken = Deno.env.get("N8N_ASAAS_CHECKOUT_TOKEN")?.trim();
+  if (Boolean(n8nUrl) !== Boolean(n8nToken)) return answer({ error: "Configuração de pagamento incompleta: URL e token do n8n devem estar cadastrados juntos." }, 503, allowed);
+  const viaN8n = Boolean(n8nUrl && n8nToken);
   const apiKey = Deno.env.get("ASAAS_API_KEY");
-  if (!apiKey || !appUrl) return answer({ error: "Checkout ainda não configurado" }, 503, allowed);
+  if (!viaN8n && !apiKey) return answer({ error: "Pagamento não configurado. Cadastre o webhook e o token do n8n." }, 503, allowed);
+  if (viaN8n) {
+    let endpoint: URL;
+    try { endpoint = new URL(n8nUrl!); } catch { return answer({ error: "URL do webhook n8n inválida." }, 503, allowed); }
+    if (endpoint.protocol !== "https:" || !endpoint.hostname.includes(".") || endpoint.username || endpoint.password || endpoint.search || endpoint.hash)
+      return answer({ error: "O webhook n8n precisa ser uma URL HTTPS de produção válida." }, 503, allowed);
+  }
   const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) return answer({ error: "Faça login para continuar" }, 401, allowed);
   const db = createClient(url, service, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -40,20 +52,42 @@ Deno.serve(async req => {
   if (orderError || !order) return answer({ error: "Não foi possível criar o pedido" }, 500, allowed);
   const apiBase = Deno.env.get("ASAAS_ENV") === "production" ? "https://api.asaas.com" : "https://api-sandbox.asaas.com";
   try {
-    const res = await fetch(apiBase + "/v3/checkouts", {
-      method: "POST", headers: { "accept": "application/json", "content-type": "application/json", "access_token": apiKey, "user-agent": "BeneficioCerto/1.0" },
-      body: JSON.stringify({
-        billingTypes: ["PIX", "CREDIT_CARD"], chargeTypes: ["DETACHED"], minutesToExpire: 60,
-        externalReference: order.id,
-        items: [{ name: "Acesso ao guia informativo Benefício Certo", description: "Conteúdos digitais privados, sem vínculo governamental", quantity: 1, value: amount / 100 }],
-        callback: { successUrl: appUrl + "/minha-conta?retorno=checkout", cancelUrl: appUrl + "/beneficios?retorno=cancelado", expiredUrl: appUrl + "/beneficios?retorno=expirado" },
-      }),
-    });
-    const payload = await res.json();
-    if (!res.ok || typeof payload.id !== "string") throw new Error("Asaas rejeitou a cobrança");
+    const res = viaN8n
+      ? await fetch(n8nUrl!, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-bc-secret": n8nToken! },
+          body: JSON.stringify({
+            pedido_id: order.id,
+            usuario_id: user.id,
+            valor: amount / 100,
+            produto: "Acesso ao guia informativo Benefício Certo",
+            success_url: appUrl + "/minha-conta?retorno=checkout",
+            cancel_url: appUrl + "/beneficios?retorno=cancelado",
+            expired_url: appUrl + "/beneficios?retorno=expirado",
+          }),
+          signal: AbortSignal.timeout(15000),
+        })
+      : await fetch(apiBase + "/v3/checkouts", {
+          method: "POST",
+          headers: { "accept": "application/json", "content-type": "application/json", "access_token": apiKey!, "user-agent": "BeneficioCerto/1.0" },
+          body: JSON.stringify({
+            billingTypes: ["PIX", "CREDIT_CARD"], chargeTypes: ["DETACHED"], minutesToExpire: 60,
+            externalReference: order.id,
+            items: [{ name: "Acesso ao guia informativo Benefício Certo", description: "Conteúdos digitais privados, sem vínculo governamental", quantity: 1, value: amount / 100 }],
+            callback: { successUrl: appUrl + "/minha-conta?retorno=checkout", cancelUrl: appUrl + "/beneficios?retorno=cancelado", expiredUrl: appUrl + "/beneficios?retorno=expirado" },
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+    let payload: { id?: unknown; url?: unknown; error?: unknown };
+    try { payload = await res.json(); } catch { throw new Error("Resposta de checkout inválida"); }
+    if (!res.ok) { console.error("Checkout provider rejected request", res.status); throw new Error("Falha no provedor de pagamentos"); }
+    if (typeof payload.id !== "string" || !/^[a-zA-Z0-9_-]{8,200}$/.test(payload.id))
+      throw new Error("O serviço não retornou um ID de checkout válido");
+    // n8n returns both id and url; only accept URL for the exact same checkout ID.
+    const checkoutUrl = checkoutHost + encodeURIComponent(payload.id);
     const saved = await db.from("orders").update({ status: "checkout_created", external_checkout_id: payload.id, updated_at: new Date().toISOString() }).eq("id", order.id);
     if (saved.error) throw saved.error;
-    return answer({ url: checkoutHost + encodeURIComponent(payload.id) }, 200, allowed);
+    return answer({ url: checkoutUrl }, 200, allowed);
   } catch (err) {
     await db.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", order.id);
     console.error("Checkout failure", err);

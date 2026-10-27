@@ -6,14 +6,11 @@ import { FavoriteButton } from "./FavoriteButton";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ArrowRight, LockKeyhole } from "lucide-react";
-import { useState } from "react";
 import { useBenefitAccess } from "@/hooks/use-benefit-access";
-import { PaymentPrompt } from "@/components/benefits/PaymentPrompt";
 
 export function BenefitCard({ benefit }: { benefit: Benefit }) {
-  const { canOpen, checking } = useBenefitAccess();
+  const { canOpen } = useBenefitAccess();
   const locked = !canOpen(benefit.slug);
-  const [payOpen, setPayOpen] = useState(false);
   const category = getCategory(benefit.categoria);
   const Icon = category
     ? (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[category.icon] ?? Icons.Circle
@@ -69,8 +66,7 @@ export function BenefitCard({ benefit }: { benefit: Benefit }) {
         </div>
       </article>
   );
-  return locked ? <>
-    <button type="button" className="group block w-full text-left animate-fade-up" disabled={checking} onClick={() => setPayOpen(true)} aria-label={`Desbloquear ${benefit.nome}`}>{article}</button>
-    <PaymentPrompt open={payOpen} onOpenChange={setPayOpen} benefitName={benefit.nome}/>
-  </> : <Link to="/beneficios/$slug" params={{ slug: benefit.slug }} className="group block animate-fade-up">{article}</Link>;
+  // Every card navigates to its guide. The detail route handles free access
+  // or displays the premium unlock prompt for restricted guides.
+  return <Link to="/beneficios/$slug" params={{ slug: benefit.slug }} className="group block animate-fade-up">{article}</Link>;
 }

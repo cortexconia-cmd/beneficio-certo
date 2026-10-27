@@ -1,6 +1,6 @@
 import { Search, X } from "lucide-react";
 import { useMemo } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { BenefitCard } from "@/components/BenefitCard";
 import { useLiveBenefits } from "@/hooks/use-live-benefits";
 import { categories } from "@/data/categories";
@@ -28,6 +28,7 @@ export const Route = createFileRoute("/beneficios")({
 
 function CatalogPage() {
   const { q, categoria } = Route.useSearch();
+  const path = useRouterState({ select: state => state.location.pathname });
   const navigate = Route.useNavigate();
   const { benefits } = useLiveBenefits();
 
@@ -40,6 +41,10 @@ function CatalogPage() {
 
   const update = (patch: Record<string, string | undefined>) =>
     navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, ...patch }) as never });
+
+  // The detail route is nested under /beneficios; render its Outlet instead of
+  // leaving the catalog mounted when the URL changes.
+  if (path.startsWith("/beneficios/")) return <Outlet />;
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-10 md:py-14">

@@ -78,9 +78,20 @@ Deno.serve(async req => {
           }),
           signal: AbortSignal.timeout(15000),
         });
+    // The upstream webhook can respond with HTML, empty body, or non-JSON on auth/route failures.
+    // Log only status and MIME, never tokens, response body, or request metadata.
+    const contentType = res.headers.get("content-type") ?? "missing";
+    if (!res.ok) {
+      console.error("Checkout upstream HTTP failure", {provider: viaN8n ? "n8n" : "asaas",status: res.status, contentType: contentType.slice(0,90)});
+      if (viaN8n && (res.status === 401 || res.status === 403)) throw new Error("Autenticação do Webhook n8n rejeitada.");
+      if (viaN8n && res.status === 404) throw new Error("Webhook n8n não encontrado. Confira a Production URL e se está ativo.");
+      throw new Error("Serviço de checkout retornou HTTP " + res.status);
+    }
     let payload: { id?: unknown; url?: unknown; error?: unknown };
-    try { payload = await res.json(); } catch { throw new Error("Resposta de checkout inválida"); }
-    if (!res.ok) { console.error("Checkout provider rejected request", res.status); throw new Error("Falha no provedor de pagamentos"); }
+    try { payload = await res.json(); } catch {
+      console.error("Checkout response is not JSON", {provider: viaN8n ? "n8n" : "asaas",status: res.status,contentType: contentType.slice(0,90)});
+      throw new Error("Webhook não devolveu JSON. Confira Respond to Webhook e a URL de produção.");
+    }
     if (typeof payload.id !== "string" || !/^[a-zA-Z0-9_-]{8,200}$/.test(payload.id))
       throw new Error("O serviço não retornou um ID de checkout válido");
     // n8n returns both id and url; only accept URL for the exact same checkout ID.
@@ -91,6 +102,7 @@ Deno.serve(async req => {
   } catch (err) {
     await db.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", order.id);
     console.error("Checkout failure", err);
-    return answer({ error: "Não foi possível iniciar o pagamento. Tente novamente." }, 502, allowed);
+    const safe = err instanceof Error && /^(Autenticação do Webhook|Webhook n8n não encontrado|Webhook não devolveu JSON|Serviço de checkout retornou HTTP)/.test(err.message) ? err.message : "Não foi possível iniciar o pagamento. Tente novamente.";
+    return answer({ error: safe }, 502, allowed);
   }
 });

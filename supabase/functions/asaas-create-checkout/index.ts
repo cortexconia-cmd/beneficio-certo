@@ -13,7 +13,7 @@ function answer(body: unknown, code: number, origin: string) {
 Deno.serve(async req => {
   const origin = req.headers.get("origin") || "";
   const allowed = origins.has(origin) ? origin : "";
-  if (req.method === "OPTIONS") return new Response(null, { status: allowed ? 204 : 403, headers: allowed ? { "access-control-allow-origin": allowed, "access-control-allow-headers": "authorization, apikey, content-type", "access-control-allow-methods": "POST, OPTIONS" } : {} });
+  if (req.method === "OPTIONS") return new Response(null, { status: allowed ? 204 : 403, headers: allowed ? { "access-control-allow-origin": allowed, "access-control-allow-headers": "authorization, apikey, x-client-info, content-type", "access-control-allow-methods": "POST, OPTIONS" } : {} });
   if (req.method !== "POST" || !allowed) return answer({ error: "Origem ou método inválido" }, 403, allowed);
   const n8nUrl = Deno.env.get("N8N_ASAAS_CHECKOUT_URL")?.trim();
   const n8nToken = Deno.env.get("N8N_ASAAS_CHECKOUT_TOKEN")?.trim();

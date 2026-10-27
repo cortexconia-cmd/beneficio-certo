@@ -17,7 +17,7 @@ export const Route = createFileRoute("/admin")({
 
 type Row=Record<string,unknown>;
 type Dashboard={totalUsers:number;newUsers:number;sessions:number;uniqueVisitors:number;registrationStarted:number;ordersCreated:number;checkoutStarted:number;paidOrders:number;pendingOrders:number;revenueCents:number;refundedCents:number;activeAccess:number;publishedBenefits:number;totalBenefits:number;daily:{date:string;registrations:number;sessions:number;purchases:number}[]};
-type Section="visao"|"usuarios"|"pedidos"|"aquisicao"|"conteudos"|"preco"|"auditoria"|"equipe";
+type Section="visao"|"usuarios"|"pedidos"|"aquisicao"|"conteudos"|"preco"|"auditoria"|"equipe"|"integracoes";
 const nav:{id:Section;label:string;icon:React.ComponentType<{className?:string}>}[]=[
   {id:"visao",label:"Visão geral",icon:Icons.LayoutDashboard},
   {id:"usuarios",label:"Usuários",icon:Icons.Users},
@@ -27,6 +27,7 @@ const nav:{id:Section;label:string;icon:React.ComponentType<{className?:string}>
   {id:"preco",label:"Configurações",icon:Icons.Settings2},
   {id:"auditoria",label:"Auditoria",icon:Icons.ScrollText},
   {id:"equipe",label:"Equipe administrativa",icon:Icons.UserCog},
+  {id:"integracoes",label:"Integrações",icon:Icons.PlugZap},
 ];
 const money=(cents:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(cents/100);
 const date=(d:unknown)=>typeof d==="string"?new Date(d).toLocaleDateString("pt-BR"):"—";
@@ -59,8 +60,8 @@ function Admin(){
  const authorized=useQuery({queryKey:["admin-check",user?.id],enabled:!!user&&!authLoading,queryFn:()=>api<{data:Dashboard;role:"admin"|"admin_master"}>("overview",{period}),retry:false,staleTime:60000});
  const isAdmin=!!user&&authorized.isSuccess;
  const isMaster=isAdmin&&authorized.data?.role==="admin_master";
- const visibleNav=nav.filter(n=>n.id!=="equipe"||isMaster);
- const data=useQuery({queryKey:["admin-view",user?.id,section,period,page,search],enabled:isAdmin,queryFn:()=>api<Row>(section==="visao"?"overview":section==="usuarios"?"users":section==="pedidos"?"orders":section==="aquisicao"?"acquisition":section==="conteudos"?"benefits":section==="preco"?"setting":section==="equipe"?"staff-list":"audit",{period,page,search}),staleTime:10000});
+ const visibleNav=nav.filter(n=>(n.id!=="equipe"&&n.id!=="integracoes")||isMaster);
+ const data=useQuery({queryKey:["admin-view",user?.id,section,period,page,search],enabled:isAdmin,queryFn:()=>api<Row>(section==="visao"?"overview":section==="usuarios"?"users":section==="pedidos"?"orders":section==="aquisicao"?"acquisition":section==="conteudos"?"benefits":section==="preco"?"setting":section==="equipe"?"staff-list":section==="integracoes"?"integrations":"audit",{period,page,search}),staleTime:10000});
  const choose=(s:Section)=>{setSection(s);setPage(0);setSearch("");setMessage("");setError("")};
  const refresh=()=>{void cache.invalidateQueries({queryKey:["admin-view"]});void cache.invalidateQueries({queryKey:["admin-check"]})};
  const run=async (action:string,payload:Row)=>{setMessage("");setError("");try{const response=await api<{success:boolean}>(action,payload);if(!response.success)throw new Error("Nenhum registro foi modificado.");setMessage("Alteração salva com registro de auditoria.");refresh();return true}catch(e){setError(e instanceof Error?e.message:"Falha ao salvar.");return false}};
@@ -86,6 +87,7 @@ function Admin(){
     section==="conteudos"?<Benefits rows={result.data} run={run}/>:
     section==="preco"?<Settings data={result.data} run={run}/>:
     section==="equipe"&&isMaster?<Staff rows={result.data} actorId={user.id} run={run}/>:
+    section==="integracoes"&&isMaster?<Integrations data={result.data}/>:
     <Audit rows={result.rows} page={page} total={toNum(result.total)} setPage={setPage}/>}
    </main>
  </div>;
@@ -245,5 +247,19 @@ function Staff({rows,actorId,run}:{rows:unknown;actorId:string;run:(action:strin
     <Button onClick={()=>void changeRole()} disabled={busy||reason.trim().length<8||selected===actorId}>{busy?"Salvando…":"Confirmar alteração de cargo"}</Button>
     <p className="text-xs text-muted-foreground">Somente AdminMaster pode alterar cargos. Não é possível alterar o próprio cargo nem remover o último AdminMaster. Toda alteração é auditada.</p>
   </section>}
+ </div>;
+}
+
+function Integrations({data}:{data:unknown}){
+ const fields=isRecord(data)?data:{};
+ const providers=[
+  {title:"Asaas",rows:[["Chave API",fields.asaasApiKey],["Token Webhook",fields.asaasWebhookToken],["APP_URL",fields.appUrl]]},
+  {title:"SolvChat",rows:[["Token API",fields.solvChatToken],["URL de envio",fields.solvChatSendUrl],["Segredo OTP",fields.otpPepper]]},
+  {title:"Meta Ads",rows:[["ID do Pixel (servidor)",fields.metaPixelId],["Token CAPI",fields.metaCapiToken]]}
+ ] as const;
+ return <div className="space-y-4">
+  <section className="rounded-2xl border bg-white p-5"><h2 className="text-lg font-bold">Verificação das integrações</h2><p className="mt-1 text-sm text-muted-foreground">Confirma somente a existência dos Secrets na Edge Function. Não confirma que credenciais, envios e pagamentos estejam funcionando.</p><div className="mt-4 rounded-xl bg-secondary p-3 text-sm">Ambiente Asaas: <strong>{fields.asaasEnv==="production"?"Produção — pagamentos reais":"Sandbox — testes"}</strong></div></section>
+  <div className="grid gap-4 lg:grid-cols-3">{providers.map(p=><section key={p.title} className="rounded-2xl border bg-white p-5"><h3 className="font-bold">{p.title}</h3><div className="mt-4 space-y-3">{p.rows.map(([name,status])=><div key={name} className="flex items-center justify-between gap-2 border-b pb-2"><span className="text-sm text-muted-foreground">{name}</span><span className={`text-xs font-semibold ${status?"text-emerald-700":"text-amber-700"}`}>{status?"Configurado":"Pendente"}</span></div>)}</div></section>)}</div>
+  <p className="text-sm text-muted-foreground">Cadastre as chaves exclusivamente em Supabase → Edge Functions → Secrets. Não compartilhe credenciais em chats e não use variáveis públicas para chaves privadas. Teste SolvChat e Asaas em ambiente controlado antes de liberar vendas.</p>
  </div>;
 }

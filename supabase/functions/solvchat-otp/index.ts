@@ -5,7 +5,13 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.0";
 const client = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
+const cors = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-headers": "authorization, apikey, x-client-info, content-type",
+  "cache-control": "no-store",
+};
+const json = (body: unknown, status = 200) => Response.json(body, { status, headers: cors });
 const encoder = new TextEncoder();
 async function digest(text: string) {
   const hash = await crypto.subtle.digest("SHA-256", encoder.encode(text));
@@ -15,6 +21,7 @@ const mobile = (value: string) => /^55(?:[1-9][0-9])[0-9]{8,9}$/.test(value);
 function validCode(value: unknown): value is string { return typeof value === "string" && /^\d{6}$/.test(value); }
 
 Deno.serve(async req => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
   const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!bearer) return json({ error: "Entre para confirmar o celular." }, 401);

@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth, isActiveGrant } from "@/hooks/use-auth";
@@ -22,7 +23,9 @@ export const Route = createFileRoute("/minha-conta")({
 });
 
 function AccountPage() {
-  const { user, profile, loading, error: authError, updateProfile } = useAuth();
+  const { user, profile, loading, error: authError, updateProfile, logout } = useAuth();
+  const navigate = useNavigate();
+  const [signingOut, setSigningOut] = useState(false);
   const { hasCatalog, isStaff } = useBenefitAccess();
   const [loginOpen, setLoginOpen] = useState(false);
   const [name, setName] = useState("");
@@ -79,6 +82,25 @@ function AccountPage() {
           {isStaff && <p className="mt-1 text-sm text-muted-foreground">Premium automático por função administrativa.</p>}
           {active.length > 0 && <ul className="list-disc pl-5 mt-2 text-sm text-muted-foreground">{active.map((grant) => <li key={grant.id}>{grant.access_scope === "catalog" ? "Catálogo" : grant.access_scope === "guide" ? "Guia" : grant.access_scope === "benefit" ? "Benefício" : grant.access_scope}{grant.expires_at ? ` — válido até ${new Date(grant.expires_at).toLocaleString("pt-BR")}` : " — sem vencimento"}</li>)}</ul>}
         </>}
+      </section>
+      <section className="mt-10 border-t border-border pt-6">
+        <h2 className="text-xl font-semibold mb-2">Sessão</h2>
+        <p className="mb-4 text-sm text-muted-foreground">Ao sair, será necessário entrar novamente para acessar seus dados e benefícios exclusivos.</p>
+        <Button type="button" variant="outline" className="gap-2" disabled={signingOut} onClick={async () => {
+          if (signingOut) return;
+          setError("");
+          setSigningOut(true);
+          try {
+            await logout();
+            await navigate({ to: "/" });
+          } catch (failure) {
+            setError(failure instanceof Error ? failure.message : "Não foi possível encerrar sua sessão.");
+          } finally {
+            setSigningOut(false);
+          }
+        }}>
+          <LogOut className="size-4" /> {signingOut ? "Saindo…" : "Sair da conta"}
+        </Button>
       </section>
     </>}
     <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />

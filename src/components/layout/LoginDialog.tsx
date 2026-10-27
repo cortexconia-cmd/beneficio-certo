@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff } from "lucide-react";
+import { trackEvent } from "@/components/ConsentTracking";
 
 interface Props {
   open: boolean;
@@ -57,6 +58,7 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
                 setSuccess(confirm ? "Enviamos um código de confirmação pelo WhatsApp." : "Digite o código enviado pelo WhatsApp.");
               } else if (mode === "verificar") {
                 await verifyPhoneCode(whatsapp, code);
+                void trackEvent("Lead");
                 setSuccess("Celular confirmado. Sua conta está pronta.");
                 setCode("");
                 onOpenChange(false);

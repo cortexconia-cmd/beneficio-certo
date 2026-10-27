@@ -23,13 +23,21 @@ Deno.serve(async req=>{
   return response(origin,{pixelId:p.consent_marketing===true&&/^\\d{10,20}$/.test(pixel)?pixel:null,
     priceCents:Number.isSafeInteger(amount)&&amount>=100&&amount<=100000?amount:2990});
  }
- if(p.consent_analytics!==true || !isUuid(p.visitor_id)||!isUuid(p.session_id))return response(origin,{error:"Consentimento e identificadores válidos são necessários"},400);
+ if(!isUuid(p.visitor_id)||!isUuid(p.session_id))return response(origin,{error:"Identificadores inválidos"},400);
+ if(p.action!=="privacy"&&p.consent_analytics!==true)return response(origin,{error:"Consentimento de métricas necessário"},400);
  const kind=p.action;
- if(!["visit","event","identify"].includes(String(kind)))return response(origin,{error:"Evento inválido"},400);
+ if(!["visit","event","identify","privacy"].includes(String(kind)))return response(origin,{error:"Evento inválido"},400);
  const token=req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
  let userId:string|null=null;
  if(token){const {data}=await db.auth.getUser(token);userId=data.user?.id??null;}
  if(kind==="identify"&&!userId)return response(origin,{error:"Faça login"},401);
+ if(kind==="privacy"){
+  const {data:owned}=await db.from("visitor_sessions").select("id").eq("id",p.session_id).eq("visitor_id",p.visitor_id).maybeSingle();
+  if(!owned)return response(origin,{ok:true});
+  await db.from("visitor_sessions").update({consent_marketing:false}).eq("visitor_id",p.visitor_id);
+  if(userId)await db.from("user_privacy_preferences").upsert({user_id:userId,consent_marketing:false,updated_at:new Date().toISOString()});
+  return response(origin,{ok:true});
+ }
  const {data:recent,error:recentError}=await db.from("visitor_sessions").select("id,user_id").eq("id",p.session_id).eq("visitor_id",p.visitor_id).maybeSingle();
  if(recentError)return response(origin,{error:"Falha ao consultar sessão"},500);
  if(kind!=="visit"&&!recent)return response(origin,{error:"Sessão não encontrada"},409);
@@ -38,6 +46,9 @@ Deno.serve(async req=>{
   if(error)return response(origin,{error:"Falha ao registrar visita"},500);
  }else if(recent&&((userId&&recent.user_id!==userId)||p.consent_marketing===true)){
   await db.from("visitor_sessions").update({...(userId?{user_id:userId}:{}),...(p.consent_marketing===true?{consent_marketing:true}:{}),last_seen_at:new Date().toISOString()}).eq("id",p.session_id).eq("visitor_id",p.visitor_id);
+ }
+ if(userId&&(kind==="visit"||kind==="identify")){
+  await db.from("user_privacy_preferences").upsert({user_id:userId,consent_marketing:p.consent_marketing===true,updated_at:new Date().toISOString()});
  }
  if(kind==="visit"||kind==="identify"){
   const utms=isRecord(p.utms)?p.utms:{};

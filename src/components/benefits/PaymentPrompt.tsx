@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { LoginDialog } from "@/components/layout/LoginDialog";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { trackEvent } from "@/components/ConsentTracking";
 
 export function PaymentPrompt({ open, onOpenChange, benefitName }: { open: boolean; onOpenChange: (open: boolean) => void; benefitName?: string }) {
   const { user, phoneVerified } = useAuth();
@@ -19,6 +20,7 @@ export function PaymentPrompt({ open, onOpenChange, benefitName }: { open: boole
       if (failure || !data?.url) throw new Error("Pagamento ainda indisponível. Tente novamente mais tarde.");
       const url = new URL(data.url);
       if (url.protocol !== "https:" || !["asaas.com", "www.asaas.com", "sandbox.asaas.com", "checkout.asaas.com", "sandbox.checkout.asaas.com"].includes(url.hostname) && !url.hostname.endsWith(".asaas.com")) throw new Error("Link de pagamento inválido.");
+      await trackEvent("InitiateCheckout");
       window.location.assign(url.toString());
     } catch (e) { setError(e instanceof Error ? e.message : "Falha ao abrir pagamento."); setPending(false); }
   }

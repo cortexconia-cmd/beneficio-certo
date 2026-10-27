@@ -46,7 +46,7 @@ const send=async(action:string,params:Record<string,unknown>={})=>{
  if(!consent())return;
  const keys=ids();
  await supabase.functions.invoke("public-analytics",{body:{
-  action, consent_analytics:true,consent_marketing:false,...keys,
+  action, consent_analytics:true,...keys,
   path:location.pathname,referrer:document.referrer,utms:utms(),
   consent_marketing:marketing(),fbp:document.cookie.match(/(?:^|; )_fbp=([^;]*)/)?.[1],
   fbc:document.cookie.match(/(?:^|; )_fbc=([^;]*)/)?.[1],...params

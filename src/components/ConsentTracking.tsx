@@ -78,11 +78,26 @@ export function ConsentTracking(){
   if(choice==="yes"&&user?.id)void send("identify");
  },[choice,user?.id]);
  const decide=(analytics:boolean,ads:boolean)=>{
+  const wasMarketing=marketing();
+  const visitor_id=localStorage.getItem(VID),session_id=sessionStorage.getItem(SID);
+  // Withdrawal is conveyed to the server *before* turning off local tracking.
+  // It does not create a PageView or any other analytics event.
+  if(wasMarketing&&!ads&&visitor_id&&session_id){
+    void supabase.functions.invoke("public-analytics",{body:{
+      action:"privacy",visitor_id,session_id,consent_analytics:false,consent_marketing:false
+    }});
+  }
   localStorage.setItem(CONSENT,analytics?"yes":"no");
   localStorage.setItem(MARKETING,ads?"yes":"no");
+  if(!ads){
+    for(const key of ["_fbp","_fbc"])document.cookie=key+"=; Max-Age=0; Path=/; SameSite=Lax";
+  }
   if(!analytics){localStorage.removeItem(VID);sessionStorage.removeItem(SID);initialized=false}
   setChoice(analytics?"yes":"no");
-  if(analytics)void initializeAnalytics();
+  if(analytics){
+   void initializeAnalytics();
+   void send("identify");
+  }
  };
  useEffect(()=>{
   const handler=()=>setChoice("unknown");

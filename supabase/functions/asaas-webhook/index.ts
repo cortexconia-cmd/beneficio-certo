@@ -5,6 +5,42 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 function respond(status: number, message: string) {
   return new Response(JSON.stringify({ message }), { status, headers: { "content-type": "application/json" } });
 }
+async function sha256(raw:string){
+ const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(raw));
+ return Array.from(new Uint8Array(bytes)).map(v=>v.toString(16).padStart(2,"0")).join("");
+}
+async function sendPurchaseCapi(checkoutId:string){
+ const token=Deno.env.get("META_CAPI_TOKEN"), pixel=Deno.env.get("META_PIXEL_ID")??"";
+ if(!token||!/^\\d{10,20}$/.test(pixel))return;
+ const {data:order,error:orderError}=await db.from("orders").select("id,user_id,amount_cents,status")
+   .eq("external_checkout_id",checkoutId).maybeSingle();
+ if(orderError||!order||order.status!=="paid")return;
+ const {data:permission}=await db.from("visitor_sessions").select("id").eq("user_id",order.user_id)
+  .eq("consent_marketing",true).order("started_at",{ascending:false}).limit(1).maybeSingle();
+ if(!permission)return;
+ const [identity,profile]=await Promise.all([
+  db.auth.admin.getUserById(order.user_id),
+  db.from("profiles").select("whatsapp").eq("id",order.user_id).maybeSingle()
+ ]);
+ const email=identity.data.user?.email?.trim().toLowerCase()??"";
+ const phone=profile.data?.whatsapp?.replace(/\\D/g,"")??"";
+ const userdata:Record<string,unknown>={};
+ if(email)userdata.em=[await sha256(email)];
+ if(phone)userdata.ph=[await sha256(phone)];
+ if(!Object.keys(userdata).length)return;
+ const payload={data:[{
+   event_name:"Purchase",event_time:Math.floor(Date.now()/1000),event_id:checkoutId,
+   action_source:"website",event_source_url:"https://beneficio-compass-guide.lovable.app/minha-conta",
+   user_data:userdata,custom_data:{currency:"BRL",value:order.amount_cents/100}
+ }]};
+ try{
+  const res=await fetch("https://graph.facebook.com/v23.0/"+pixel+"/events",{
+   method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
+   body:JSON.stringify(payload),signal:AbortSignal.timeout(5000)
+  });
+  if(!res.ok)console.error("Meta CAPI Purchase failed",res.status);
+ }catch(e){console.error("Meta CAPI Purchase temporarily unavailable",e instanceof Error?e.name:"error")}
+}
 function constantTimeEqual(a: string, b: string) {
   const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b);
   let diff = x.length ^ y.length;
@@ -32,7 +68,7 @@ Deno.serve(async req => {
   // Ignore unlinked refund events; no access should be revoked without exact order correlation.
   const externalReference = typeof payment?.externalReference === "string" ? payment.externalReference : "";
   if (name.startsWith("PAYMENT_") && !externalReference) return respond(200, "Unmatched payment event");
-  const { error } = await db.rpc("process_asaas_webhook", {
+  const { data:processed,error } = await db.rpc("process_asaas_webhook", {
     p_event_id: eventId,
     p_event_type: name,
     p_checkout_id: typeof checkout?.id === "string" ? checkout.id : "",
@@ -40,5 +76,8 @@ Deno.serve(async req => {
     p_payload: event,
   });
   if (error) { console.error("Asaas reconciliation failed", error.message); return respond(500, "Retry event later"); }
+  // Purchase conversion can only originate from the authenticated financial webhook,
+  // after the order was marked paid, and only for users with marketing consent.
+  if(processed===true&&name==="CHECKOUT_PAID"&&typeof checkout?.id==="string")await sendPurchaseCapi(checkout.id);
   return respond(200, "OK");
 });

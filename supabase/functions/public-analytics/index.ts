@@ -18,7 +18,10 @@ Deno.serve(async req=>{
  try{p=await req.json()}catch{return response(origin,{error:"Corpo inválido"},400)}
  if(p.action==="config"){
   const pixel=Deno.env.get("META_PIXEL_ID")??"";
-  return response(origin,{pixelId:p.consent_marketing===true&&/^\\d{10,20}$/.test(pixel)?pixel:null});
+  const {data:setting}=await db.from("platform_settings").select("value").eq("key","catalog_price_cents").maybeSingle();
+  const amount=setting?.value;
+  return response(origin,{pixelId:p.consent_marketing===true&&/^\\d{10,20}$/.test(pixel)?pixel:null,
+    priceCents:Number.isSafeInteger(amount)&&amount>=100&&amount<=100000?amount:2990});
  }
  if(p.consent_analytics!==true || !isUuid(p.visitor_id)||!isUuid(p.session_id))return response(origin,{error:"Consentimento e identificadores válidos são necessários"},400);
  const kind=p.action;

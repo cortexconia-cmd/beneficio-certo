@@ -15,9 +15,8 @@ async function sendPurchaseCapi(checkoutId:string){
  const {data:order,error:orderError}=await db.from("orders").select("id,user_id,amount_cents,status")
    .eq("external_checkout_id",checkoutId).maybeSingle();
  if(orderError||!order||order.status!=="paid")return;
- const {data:permission}=await db.from("visitor_sessions").select("id").eq("user_id",order.user_id)
-  .eq("consent_marketing",true).order("started_at",{ascending:false}).limit(1).maybeSingle();
- if(!permission)return;
+ const {data:permission}=await db.from("user_privacy_preferences").select("consent_marketing").eq("user_id",order.user_id).maybeSingle();
+ if(permission?.consent_marketing!==true)return;
  const [identity,profile]=await Promise.all([
   db.auth.admin.getUserById(order.user_id),
   db.from("profiles").select("whatsapp").eq("id",order.user_id).maybeSingle()

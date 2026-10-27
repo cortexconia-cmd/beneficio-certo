@@ -47,7 +47,7 @@ Deno.serve(async req=>{
  }
  if(kind==="event"){
   const eventName=str(p.event_name,80);
-  if(!eventName||!["PageView","ViewContent","RegistrationStarted","Lead","InitiateCheckout","Purchase"].includes(eventName)||!isUuid(p.event_id))return response(origin,{error:"Evento inválido"},400);
+  if(!eventName||!["PageView","ViewContent","registration_started","Lead","InitiateCheckout"].includes(eventName)||!isUuid(p.event_id))return response(origin,{error:"Evento inválido"},400);
   const {error}=await db.from("tracking_events").upsert({
    event_id:p.event_id,visitor_id:p.visitor_id,session_id:p.session_id,user_id:userId,
    event_name:eventName,page_path:str(p.path,250),properties:{source:"website"}

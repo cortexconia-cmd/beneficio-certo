@@ -17,7 +17,21 @@ export function PaymentPrompt({ open, onOpenChange, benefitName }: { open: boole
     setPending(true); setError("");
     try {
       const { data, error: failure } = await supabase.functions.invoke("asaas-create-checkout", { body: {} });
-      if (failure || !data?.url) throw new Error("Pagamento ainda indisponível. Tente novamente mais tarde.");
+      if (failure || !data?.url) {
+        // Edge Functions return actionable JSON errors, but the old UI hid all of them.
+        // Show only the API's public error message; never display authorization headers or tokens.
+        let reason = typeof data?.error === "string" ? data.error : "";
+        if (!reason && failure && "context" in failure) {
+          const context = failure.context as Response | undefined;
+          if (context && typeof context.clone === "function") {
+            try {
+              const response = await context.clone().json();
+              if (typeof response?.error === "string") reason = response.error;
+            } catch { /* A gateway/network failure may not have a JSON body. */ }
+          }
+        }
+        throw new Error(reason || "Não foi possível iniciar o pagamento. Verifique sua sessão ou tente novamente.");
+      }
       const url = new URL(data.url);
       if (url.protocol !== "https:" || !["asaas.com", "www.asaas.com", "sandbox.asaas.com", "checkout.asaas.com", "sandbox.checkout.asaas.com"].includes(url.hostname) && !url.hostname.endsWith(".asaas.com")) throw new Error("Link de pagamento inválido.");
       await trackEvent("InitiateCheckout");

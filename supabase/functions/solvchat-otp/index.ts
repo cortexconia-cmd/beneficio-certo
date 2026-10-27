@@ -1,6 +1,6 @@
-// WhatsApp OTP via SolvChat API. Deploy with verify_jwt=true.
-// Secrets (Supabase Edge Functions): SOLVCHAT_TOKEN, SOLVCHAT_OTP_PEPPER.
-// Supply SOLVCHAT_SEND_URL (exact verified API endpoint); no endpoint is assumed.
+// OTP generated and validated server-side; delivery delegated to authenticated n8n webhook.
+// Secrets: SOLVCHAT_OTP_PEPPER, N8N_SOLV_WEBHOOK_URL, N8N_SOLV_WEBHOOK_TOKEN.
+// Legacy SolvChat API remains fallback until the n8n URL and token are configured.
 import { createClient } from "npm:@supabase/supabase-js@2.57.0";
 const client = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -44,13 +44,22 @@ Deno.serve(async req => {
   if (!pepper || pepper.length < 32) return json({ error: "Verificação por WhatsApp não configurada." }, 503);
 
   if (payload.action === "send") {
-    const token = Deno.env.get("SOLVCHAT_TOKEN");
-    const endpoint = Deno.env.get("SOLVCHAT_SEND_URL");
-    if (!token || !endpoint) return json({ error: "Endpoint e token do SolvChat ainda não configurados." }, 503);
+    const n8nUrl = Deno.env.get("N8N_SOLV_WEBHOOK_URL")?.trim();
+    const n8nToken = Deno.env.get("N8N_SOLV_WEBHOOK_TOKEN")?.trim();
+    const legacyToken = Deno.env.get("SOLVCHAT_TOKEN");
+    const legacyUrl = Deno.env.get("SOLVCHAT_SEND_URL");
+    if (Boolean(n8nUrl) !== Boolean(n8nToken))
+      return json({ error: "Integração n8n incompleta: configure URL e token juntos." }, 503);
+    const viaN8n = Boolean(n8nUrl && n8nToken);
+    const targetUrl = viaN8n ? n8nUrl! : legacyUrl;
+    if (!targetUrl || (!viaN8n && !legacyToken))
+      return json({ error: "Transporte de mensagens não configurado." }, 503);
     let endpointUrl: URL;
-    try { endpointUrl = new URL(endpoint); }
-    catch { return json({ error: "URL do SolvChat inválida." }, 503); }
-    if (endpointUrl.protocol !== "https:" || !endpointUrl.hostname.includes(".")) return json({ error: "O SolvChat precisa de um endpoint HTTPS válido." }, 503);
+    try { endpointUrl = new URL(targetUrl); }
+    catch { return json({ error: "URL de envio inválida." }, 503); }
+    if (endpointUrl.protocol !== "https:" || !endpointUrl.hostname.includes(".") ||
+        endpointUrl.username || endpointUrl.password || endpointUrl.search || endpointUrl.hash)
+      return json({ error: "Endpoint HTTPS de envio inválido." }, 503);
     const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
     const hash = await digest(pepper + ":" + userId + ":" + phone + ":" + code);
     const { data: reserved, error: limitError } = await client.rpc("solvchat_reserve_code",
@@ -58,18 +67,33 @@ Deno.serve(async req => {
     if (limitError) return json({ error: "Não foi possível solicitar código." }, 500);
     if (!reserved) return json({ error: "Aguarde antes de solicitar outro código. O limite é de 5 envios por dia." }, 429);
     try {
+      const message = "Benefício Certo: seu código de confirmação é " + code +
+        ". Ele expira em 5 minutos. Não compartilhe esse código.";
       const response = await fetch(endpointUrl.toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
-        body: JSON.stringify({
-          number: phone,
-          body: "Benefício Certo: seu código de confirmação é " + code +
-            ". Ele expira em 5 minutos. Não compartilhe esse código.",
-        }),
+        headers: viaN8n
+          ? { "Content-Type": "application/json", "x-bc-secret": n8nToken! }
+          : { "Content-Type": "application/json", "Authorization": "Bearer " + legacyToken! },
+        body: JSON.stringify(viaN8n
+          ? { user_id: userId, telefone: phone, mensagem: message, tipo: "verificacao", expira_em_minutos: 5 }
+          : { number: phone, body: message }),
+        signal: AbortSignal.timeout(10000),
       });
       if (!response.ok) {
-        console.error("SolvChat send status", response.status);
-        return json({ error: "Não foi possível enviar a mensagem pelo WhatsApp. Tente novamente." }, 502);
+        console.error("OTP delivery provider HTTP status", response.status);
+        return json({ error: "Não foi possível enviar o código pelo WhatsApp. Tente novamente." }, 502);
+      }
+      if (viaN8n) {
+        // n8n must only acknowledge success after the SolvChat node accepted sending.
+        let acknowledgement: { sent?: unknown };
+        try { acknowledgement = await response.json(); } catch {
+          console.error("n8n returned non-JSON receipt");
+          return json({ error: "O fluxo n8n não confirmou o envio." }, 502);
+        }
+        if (acknowledgement?.sent !== true) {
+          console.error("n8n did not acknowledge successful delivery");
+          return json({ error: "O fluxo n8n não confirmou o envio." }, 502);
+        }
       }
       return json({ sent: true, expiresInSeconds: 300 });
     } catch (err) {

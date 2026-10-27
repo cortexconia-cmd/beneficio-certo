@@ -79,8 +79,7 @@ Deno.serve(async req=>{
       const email=typeof input.email==="string"?input.email.trim().toLowerCase():"";
       if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)||email.length>250||
         !["admin","admin_master"].includes(input.staffRole??""))return reply({error:"E-mail ou cargo inválido"},400);
-      const appUrl=Deno.env.get("APP_URL");
-      if(!appUrl)return reply({error:"Configure APP_URL nos secrets do Supabase antes de convidar"},503);
+      const appUrl=Deno.env.get("APP_URL") || "https://beneficio-compass-guide.lovable.app";
       let redirect:URL;
       try{redirect=new URL(appUrl)}catch{return reply({error:"APP_URL inválida"},503)}
       if(redirect.protocol!=="https:"||redirect.username||redirect.password)return reply({error:"APP_URL deve ser HTTPS"},503);

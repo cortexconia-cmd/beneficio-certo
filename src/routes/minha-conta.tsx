@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth, isActiveGrant } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { LoginDialog } from "@/components/layout/LoginDialog";
+import { useBenefitAccess } from "@/hooks/use-benefit-access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/minha-conta")({
 
 function AccountPage() {
   const { user, profile, loading, error: authError, updateProfile } = useAuth();
+  const { hasCatalog, isStaff } = useBenefitAccess();
   const [loginOpen, setLoginOpen] = useState(false);
   const [name, setName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
@@ -73,7 +75,8 @@ function AccountPage() {
         <h2 className="text-xl font-semibold mb-3">Status de acesso</h2>
         {grants.isPending ? <p role="status" className="text-muted-foreground">Consultando acesso…</p> : grants.isError ? <>
           <p role="alert" className="text-destructive">{grants.error.message}</p><Button variant="outline" className="mt-3" onClick={() => void grants.refetch()}>Tentar novamente</Button>
-        </> : <><p className="font-medium text-primary">{active.length ? "Acesso liberado" : "Acesso gratuito"}</p>
+        </> : <><p className="font-medium text-primary">{hasCatalog ? "Acesso Premium liberado" : "Acesso gratuito"}</p>
+          {isStaff && <p className="mt-1 text-sm text-muted-foreground">Premium automático por função administrativa.</p>}
           {active.length > 0 && <ul className="list-disc pl-5 mt-2 text-sm text-muted-foreground">{active.map((grant) => <li key={grant.id}>{grant.access_scope === "catalog" ? "Catálogo" : grant.access_scope === "guide" ? "Guia" : grant.access_scope === "benefit" ? "Benefício" : grant.access_scope}{grant.expires_at ? ` — válido até ${new Date(grant.expires_at).toLocaleString("pt-BR")}` : " — sem vencimento"}</li>)}</ul>}
         </>}
       </section>

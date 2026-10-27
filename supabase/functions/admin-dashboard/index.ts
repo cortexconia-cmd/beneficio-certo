@@ -28,13 +28,25 @@ Deno.serve(async req=>{
   let input:Params;
   try{input=await req.json()}catch{return reply({error:"Requisição inválida"},400)}
   const action=input.action??"";
-  const allowed=["overview","users","orders","benefits","categories","acquisition","audit","setting","save-benefit","save-price","manual-access","staff-list","staff-invite","staff-role"];
+  const allowed=["overview","users","orders","benefits","categories","acquisition","audit","setting","save-benefit","save-price","manual-access","staff-list","staff-invite","staff-role","integrations"];
   if(!allowed.includes(action))return reply({error:"Ação não permitida"},400);
   const page=Math.max(0,Math.min(10000,Number.isInteger(input.page)?input.page!:0));
   const search=typeof input.search==="string"?input.search.trim().slice(0,90).replace(/[,()]/g,""):"";
   const period=[7,30,90,365].includes(input.period??30)?input.period!:30;
   const since=new Date(Date.now()-period*86400000).toISOString();
   try{
+    if(action==="integrations"){
+      if(!isMaster)return reply({error:"Somente AdminMaster pode consultar integrações"},403);
+      const env=(name:string)=>Boolean(Deno.env.get(name)?.trim());
+      return reply({data:{
+        asaasApiKey:env("ASAAS_API_KEY"),asaasWebhookToken:env("ASAAS_WEBHOOK_TOKEN"),
+        asaasEnv:Deno.env.get("ASAAS_ENV")==="production"?"production":"sandbox",
+        appUrl:env("APP_URL"),
+        solvChatToken:env("SOLVCHAT_TOKEN"),solvChatSendUrl:env("SOLVCHAT_SEND_URL"),
+        otpPepper:env("SOLVCHAT_OTP_PEPPER"),
+        metaPixelId:env("META_PIXEL_ID"),metaCapiToken:env("META_CAPI_TOKEN")
+      }});
+    }
     if(action==="staff-list"){
       if(!isMaster)return reply({error:"Somente AdminMaster"},403);
       const {data:members,error:membersError}=await db.from("user_roles").select("user_id,role,created_at").in("role",["admin","admin_master"]).order("created_at");

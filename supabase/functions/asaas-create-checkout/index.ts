@@ -2,14 +2,15 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.0";
 const url = Deno.env.get("SUPABASE_URL")!;
 const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const appUrl = (Deno.env.get("APP_URL") ?? "").replace(/\/$/, "");
+const appUrl = (Deno.env.get("APP_URL") ?? "https://beneficio-compass-guide.lovable.app").replace(/\/$/, "");
+const origins = new Set([new URL(appUrl).origin,"https://beneficio-compass-guide.lovable.app"]);
 const checkoutHost = "https://asaas.com/checkoutSession/show?id=";
 function answer(body: unknown, code: number, origin: string) {
-  return new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json", "access-control-allow-origin": origin, "access-control-allow-headers": "authorization, apikey, content-type", "access-control-allow-methods": "POST, OPTIONS" } });
+  return new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json", "access-control-allow-origin": origin, "access-control-allow-headers": "authorization, apikey, x-client-info, content-type", "access-control-allow-methods": "POST, OPTIONS" } });
 }
 Deno.serve(async req => {
   const origin = req.headers.get("origin") || "";
-  const allowed = appUrl && origin === new URL(appUrl).origin ? origin : "";
+  const allowed = origins.has(origin) ? origin : "";
   if (req.method === "OPTIONS") return new Response(null, { status: allowed ? 204 : 403, headers: allowed ? { "access-control-allow-origin": allowed, "access-control-allow-headers": "authorization, apikey, content-type", "access-control-allow-methods": "POST, OPTIONS" } : {} });
   if (req.method !== "POST" || !allowed) return answer({ error: "Origem ou método inválido" }, 403, allowed);
   const apiKey = Deno.env.get("ASAAS_API_KEY");
@@ -25,6 +26,9 @@ Deno.serve(async req => {
   if (profileError || verificationError || !profile?.whatsapp || !verification?.verified_at || verification.phone !== profile.whatsapp)
     return answer({ error: "Confirme seu WhatsApp com o código enviado pelo SolvChat antes de comprar." }, 403, allowed);
   const { data: grants } = await db.from("access_grants").select("id,starts_at,expires_at,revoked_at").eq("user_id", user.id).eq("access_scope", "catalog");
+  const {data:roles,error:rolesError}=await db.from("user_roles").select("role").eq("user_id",user.id).in("role",["admin","admin_master"]);
+  if (rolesError) return answer({error:"Não foi possível conferir seu acesso"},500,allowed);
+  if (roles?.length) return answer({error:"Sua conta administrativa já possui acesso Premium"},409,allowed);
   if (grants?.some(g => !g.revoked_at && Date.parse(g.starts_at) <= Date.now() && (!g.expires_at || Date.parse(g.expires_at) > Date.now()))) return answer({ error: "Seu acesso já está liberado" }, 409, allowed);
   // Reuse a still-pending checkout if one exists.
   const { data: existing } = await db.from("orders").select("external_checkout_id, created_at").eq("user_id", user.id).eq("status", "checkout_created").order("created_at", { ascending: false }).limit(1).maybeSingle();

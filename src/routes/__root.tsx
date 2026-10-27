@@ -14,6 +14,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { AuthProvider } from "@/hooks/use-auth";
+import { ConsentTracking } from "@/components/ConsentTracking";
 
 function NotFoundComponent() {
   return (
@@ -130,6 +131,7 @@ function RootComponent() {
           <Footer />
         </div>
         <MobileBottomNav />
+        <ConsentTracking />
       </div>
       </AuthProvider>
     </QueryClientProvider>

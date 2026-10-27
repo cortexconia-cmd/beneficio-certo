@@ -123,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const login: AuthState["login"] = (email, password) => perform(async () => {
     const result = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (result.error) throw new Error("Não foi possível entrar. Verifique seu e-mail e senha.");
+    if (result.error) throw new Error(result.error.message.toLowerCase().includes("email not confirmed") ? "Confirme seu e-mail pelo link recebido antes de entrar e validar o WhatsApp." : "Não foi possível entrar. Verifique seu e-mail e senha.");
     await profileReady.current;
     const check = await supabase.functions.invoke("solvchat-otp", { body: { action: "status" } });
     const verified = !check.error && check.data?.verified === true;
@@ -139,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: { data: { full_name: name.trim(), whatsapp: phone } },
     });
     if (result.error) throw new Error("Não foi possível cadastrar. Verifique seus dados.");
-    if (!result.data.session) throw new Error("O Supabase ainda exige confirmação de e-mail. Para verificar pelo WhatsApp, configure Authentication > Providers > Email para não exigir confirmação.");
+    if (!result.data.session) return false; // Hosted Supabase may require email verification before phone OTP.
     // Trigger on auth.users creates the profile; wait until it becomes visible.
     const { data: profileAfterSignup, error: profileError } = await supabase.from("profiles")
       .select("id").eq("id", result.data.user?.id ?? "").maybeSingle();

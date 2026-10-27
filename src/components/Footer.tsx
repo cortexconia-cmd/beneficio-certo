@@ -27,6 +27,7 @@ export function Footer() {
               <li><Link to="/favoritos" className="hover:text-foreground">Favoritos</Link></li>
               <li><Link to="/atualizacoes" className="hover:text-foreground">Atualizações</Link></li>
               <li><Link to="/ajuda" className="hover:text-foreground">Onde buscar ajuda</Link></li>
+              <li><Link to="/acesso" className="hover:text-foreground">Acesso completo</Link></li>
             </ul>
           </div>
           <div>
@@ -41,6 +42,7 @@ export function Footer() {
         </div>
         <div className="mt-10 pt-6 border-t border-border text-xs text-muted-foreground">
           © {new Date().getFullYear()} Projeto + Benefícios. Conteúdo informativo, não substitui canais oficiais.
+          <button type="button" className="ml-4 underline hover:text-foreground" onClick={()=>window.dispatchEvent(new Event("bc:privacy"))}>Preferências de privacidade</button>
         </div>
       </div>
     </footer>

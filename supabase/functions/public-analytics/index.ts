@@ -34,7 +34,7 @@ Deno.serve(async req=>{
   const {error}=await db.from("visitor_sessions").insert({id:p.session_id,visitor_id:p.visitor_id,user_id:userId,landing_path:str(p.path,250),referrer:str(p.referrer,250),consent_analytics:true,consent_marketing:p.consent_marketing===true});
   if(error)return response(origin,{error:"Falha ao registrar visita"},500);
  }else if(recent&&((userId&&recent.user_id!==userId)||p.consent_marketing===true)){
-  await db.from("visitor_sessions").update({...userId?{user_id:userId}:{},...p.consent_marketing===true?{consent_marketing:true}:{},last_seen_at:new Date().toISOString()}).eq("id",p.session_id).eq("visitor_id",p.visitor_id);
+  await db.from("visitor_sessions").update({...(userId?{user_id:userId}:{}),...(p.consent_marketing===true?{consent_marketing:true}:{}),last_seen_at:new Date().toISOString()}).eq("id",p.session_id).eq("visitor_id",p.visitor_id);
  }
  if(kind==="visit"||kind==="identify"){
   const utms=isRecord(p.utms)?p.utms:{};
@@ -61,8 +61,8 @@ Deno.serve(async req=>{
   if(p.consent_marketing===true){
     const pixel=Deno.env.get("META_PIXEL_ID")??"";
     const token=Deno.env.get("META_CAPI_TOKEN");
-    if(/^\\d{10,20}$/.test(pixel)&&token){
-     const metaEvent=eventName==="registration_started"?"CompleteRegistration":eventName;
+    if(eventName!=="registration_started"&&/^\\d{10,20}$/.test(pixel)&&token){
+     const metaEvent=eventName;
      const metaBody={data:[{
        event_name:metaEvent,event_time:Math.floor(Date.now()/1000),event_id:p.event_id,
        action_source:"website",event_source_url:origin+(str(p.path,250)??"/"),

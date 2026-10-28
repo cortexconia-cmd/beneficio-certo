@@ -34,6 +34,12 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
   const [success, setSuccess] = useState("");
   useEffect(() => { if (open) setMode(initialMode); }, [open, initialMode]);
   function changeMode(next: typeof mode) { setMode(next); setError(""); setSuccess(""); setPassword(""); }
+  // Opens the code screen and requests the code; a failure keeps the screen open with the real reason and "Reenviar".
+  async function requestCode(announce: string) {
+    setMode("verificar");
+    try { await sendPhoneCode(whatsapp); setSuccess(announce); }
+    catch (e) { setError(e instanceof Error ? e.message : "Não foi possível enviar o código pelo WhatsApp."); }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (loading) return; if (!next) { setPassword(""); setError(""); setSuccess(""); } onOpenChange(next); }}>
@@ -50,12 +56,12 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
             if (loading) return;
             setError(""); setSuccess("");
             try {
-              if (mode === "entrar") { const verified = await login(email, password); setPassword(""); if (!verified) { setWhatsapp(user?.whatsapp || whatsapp); setMode("verificar"); } else onOpenChange(false); }
+              if (mode === "entrar") { const verified = await login(email, password); setPassword(""); if (!verified) { setWhatsapp(user?.whatsapp || whatsapp); await requestCode("Enviamos um código de confirmação pelo WhatsApp."); } else onOpenChange(false); }
               else if (mode === "cadastrar") {
                 const confirm = await signup(name, whatsapp, email, password);
                 setPassword("");
-                setMode(confirm ? "verificar" : "entrar");
-                setSuccess(confirm ? "Enviamos um código de confirmação pelo WhatsApp." : "Cadastro solicitado. Confirme seu e-mail pelo link recebido, depois entre para validar o WhatsApp.");
+                if (confirm) await requestCode("Enviamos um código de confirmação pelo WhatsApp.");
+                else { setMode("entrar"); setSuccess("Cadastro solicitado. Confirme seu e-mail pelo link recebido, depois entre para validar o WhatsApp."); }
               } else if (mode === "verificar") {
                 await verifyPhoneCode(whatsapp, code);
                 void trackEvent("Lead");

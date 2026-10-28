@@ -66,6 +66,14 @@ Deno.serve(async req => {
       { p_user_id: userId, p_phone: phone, p_hash: hash });
     if (limitError) return json({ error: "Não foi possível solicitar código." }, 500);
     if (!reserved) return json({ error: "Aguarde antes de solicitar outro código. O limite é de 5 envios por dia." }, 429);
+    // A code that never reached the user must not burn the daily quota or the 60s cooldown.
+    const release = async () => {
+      const { data: current } = await client.from("phone_verifications").select("sends_in_window").eq("user_id", userId).maybeSingle();
+      await client.from("phone_verifications").update({
+        sends_in_window: Math.max(0, (current?.sends_in_window ?? 1) - 1),
+        sent_at: null, code_hash: null, expires_at: null, updated_at: new Date().toISOString(),
+      }).eq("user_id", userId);
+    };
     try {
       const message = "Benefício Certo: seu código de confirmação é " + code +
         ". Ele expira em 5 minutos. Não compartilhe esse código.";
@@ -81,6 +89,7 @@ Deno.serve(async req => {
       });
       if (!response.ok) {
         console.error("OTP delivery provider HTTP status", response.status);
+        await release();
         return json({ error: "Não foi possível enviar o código pelo WhatsApp. Tente novamente." }, 502);
       }
       if (viaN8n) {
@@ -88,16 +97,19 @@ Deno.serve(async req => {
         let acknowledgement: { sent?: unknown };
         try { acknowledgement = await response.json(); } catch {
           console.error("n8n returned non-JSON receipt");
+          await release();
           return json({ error: "O fluxo n8n não confirmou o envio." }, 502);
         }
         if (acknowledgement?.sent !== true) {
           console.error("n8n did not acknowledge successful delivery");
+          await release();
           return json({ error: "O fluxo n8n não confirmou o envio." }, 502);
         }
       }
       return json({ sent: true, expiresInSeconds: 300 });
     } catch (err) {
       console.error("SolvChat network error", err instanceof Error ? err.message : "network");
+      await release();
       return json({ error: "WhatsApp temporariamente indisponível." }, 502);
     }
   }

@@ -111,14 +111,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(message);
     } finally { setLoading(false); }
   }
+  // On non-2xx, supabase-js returns data=null and keeps the function's JSON body in error.context.
+  async function functionMessage(result: { data: { error?: string } | null; error: unknown }, fallback: string) {
+    const context = (result.error as { context?: Response } | null)?.context;
+    if (context && typeof context.json === "function") {
+      try { const body = await context.clone().json(); if (typeof body?.error === "string") return body.error; } catch { /* non-JSON body */ }
+    }
+    return result.data?.error ?? fallback;
+  }
   const sendPhoneCode: AuthState["sendPhoneCode"] = () => perform(async () => {
     const result = await supabase.functions.invoke("solvchat-otp", { body: { action: "send" } });
-    if (result.error || !result.data?.sent) throw new Error(result.data?.error ?? "Não foi possível enviar o código pelo WhatsApp.");
+    if (result.error || !result.data?.sent) throw new Error(await functionMessage(result, "Não foi possível enviar o código pelo WhatsApp."));
   });
   const verifyPhoneCode: AuthState["verifyPhoneCode"] = (_number, code) => perform(async () => {
     if (!/^\d{6}$/.test(code.trim())) throw new Error("Informe o código de 6 dígitos.");
     const result = await supabase.functions.invoke("solvchat-otp", { body: { action: "verify", code: code.trim() } });
-    if (result.error || result.data?.verified !== true) throw new Error(result.data?.error ?? "Código inválido ou expirado.");
+    if (result.error || result.data?.verified !== true) throw new Error(await functionMessage(result, "Código inválido ou expirado."));
     setVerifiedWhatsApp(true);
   });
   const login: AuthState["login"] = (email, password) => perform(async () => {
@@ -144,8 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: profileAfterSignup, error: profileError } = await supabase.from("profiles")
       .select("id").eq("id", result.data.user?.id ?? "").maybeSingle();
     if (profileError || !profileAfterSignup) throw new Error("Conta criada, mas o perfil ainda não está disponível. Faça login novamente.");
-    const sent = await supabase.functions.invoke("solvchat-otp", { body: { action: "send" } });
-    if (sent.error || !sent.data?.sent) throw new Error(sent.data?.error ?? "Conta criada, mas não foi possível enviar a mensagem pelo SolvChat.");
+    // The code is requested by the caller so a delivery failure does not look like a failed signup.
     return true;
   });
   const resetPassword: AuthState["resetPassword"] = (email) => perform(async () => {

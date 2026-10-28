@@ -6,6 +6,7 @@ import { useAuth, isActiveGrant } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { LoginDialog } from "@/components/layout/LoginDialog";
 import { useBenefitAccess } from "@/hooks/use-benefit-access";
+import { syncAsaasAccess } from "@/lib/sync-asaas-access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +27,7 @@ function AccountPage() {
   const { user, profile, loading, error: authError, updateProfile, logout } = useAuth();
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
-  const { hasCatalog, isStaff } = useBenefitAccess();
+  const { hasCatalog, isStaff, refresh } = useBenefitAccess();
   const [loginOpen, setLoginOpen] = useState(false);
   const [name, setName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
@@ -54,6 +55,19 @@ function AccountPage() {
       return rows;
     },
   });
+  // Back from the Asaas checkout the confirmation can lag by seconds: keep checking for up to two minutes.
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId || hasCatalog || new URLSearchParams(window.location.search).get("retorno") !== "checkout") return;
+    let tries = 0;
+    const timer = window.setInterval(async () => {
+      tries += 1;
+      if (await syncAsaasAccess(userId, true)) { await Promise.all([grants.refetch(), refresh()]); }
+      if (tries >= 24) window.clearInterval(timer);
+    }, 5000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, hasCatalog]);
   const active = grants.data?.filter((grant) => isActiveGrant(grant, now)) || [];
   return <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
     <h1 className="text-3xl sm:text-4xl font-bold mb-8">Minha conta</h1>

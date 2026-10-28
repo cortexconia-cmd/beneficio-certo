@@ -74,6 +74,8 @@ Deno.serve(async req => {
     p_order_reference: externalReference,
     p_payload: event,
   });
+  // An event for a checkout we never created can never succeed; a 5xx would only make Asaas retry and pause the webhook queue.
+  if (error?.message?.includes("unrecognized order")) { console.error("Asaas event ignored: unrecognized order"); return respond(200, "Ignored"); }
   if (error) { console.error("Asaas reconciliation failed", error.message); return respond(500, "Retry event later"); }
   // Purchase conversion can only originate from the authenticated financial webhook,
   // after the order was marked paid, and only for users with marketing consent.

@@ -6,7 +6,8 @@ const url = Deno.env.get("SUPABASE_URL")!;
 const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const appUrl = (Deno.env.get("APP_URL") ?? "https://beneficio-compass-guide.lovable.app").replace(/\/$/, "");
 const origins = new Set([new URL(appUrl).origin,"https://beneficio-compass-guide.lovable.app"]);
-const checkoutHost = "https://asaas.com/checkoutSession/show?id=";
+// Sandbox checkouts only exist on sandbox.asaas.com; set ASAAS_ENV=production when going live.
+const checkoutHost = (Deno.env.get("ASAAS_ENV") === "production" ? "https://www.asaas.com" : "https://sandbox.asaas.com") + "/checkoutSession/show?id=";
 function answer(body: unknown, code: number, origin: string) {
   return new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json", "access-control-allow-origin": origin, "access-control-allow-headers": "authorization, apikey, x-client-info, content-type", "access-control-allow-methods": "POST, OPTIONS" } });
 }

@@ -58,7 +58,7 @@ Deno.serve(async req => {
   } catch { return respond(400, "Invalid JSON"); }
   const eventId = event.id, name = event.event;
   if (typeof eventId !== "string" || typeof name !== "string" || eventId.length > 220) return respond(400, "Malformed event");
-  const recognized = ["CHECKOUT_PAID","CHECKOUT_CANCELED","CHECKOUT_EXPIRED","PAYMENT_REFUNDED","PAYMENT_CHARGEBACK_REQUESTED","PAYMENT_CHARGEBACK_DISPUTE"];
+  const recognized = ["CHECKOUT_PAID","CHECKOUT_CANCELED","CHECKOUT_EXPIRED","PAYMENT_RECEIVED","PAYMENT_CONFIRMED","PAYMENT_OVERDUE","PAYMENT_DELETED","PAYMENT_REFUNDED","PAYMENT_CHARGEBACK_REQUESTED","PAYMENT_CHARGEBACK_DISPUTE"];
   if (!recognized.includes(name)) return respond(200, "Ignored");
   const checkout = event.checkout as Record<string, unknown> | undefined;
   const payment = event.payment as Record<string, unknown> | undefined;
@@ -67,10 +67,22 @@ Deno.serve(async req => {
   // Ignore unlinked refund events; no access should be revoked without exact order correlation.
   const externalReference = typeof payment?.externalReference === "string" ? payment.externalReference : "";
   if (name.startsWith("PAYMENT_") && !externalReference) return respond(200, "Unmatched payment event");
+  // Charges created in-site (asaas-pay) have no Asaas checkout: their orders are keyed by the payment id,
+  // so PAYMENT_* lifecycle events are mapped onto the checkout events the reconciliation RPC understands.
+  const lifecycle: Record<string, string> = { PAYMENT_RECEIVED: "CHECKOUT_PAID", PAYMENT_CONFIRMED: "CHECKOUT_PAID", PAYMENT_OVERDUE: "CHECKOUT_EXPIRED", PAYMENT_DELETED: "CHECKOUT_CANCELED" };
+  let rpcType = name;
+  let rpcCheckoutId = typeof checkout?.id === "string" ? checkout.id : "";
+  if (lifecycle[name]) {
+    const paymentId = typeof payment?.id === "string" ? payment.id : "";
+    if (!paymentId || paymentId.length > 200) return respond(400, "Missing payment");
+    if (lifecycle[name] === "CHECKOUT_PAID" && !["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(String(payment?.status))) return respond(200, "Ignored");
+    rpcType = lifecycle[name];
+    rpcCheckoutId = paymentId;
+  }
   const { data:processed,error } = await db.rpc("process_asaas_webhook", {
     p_event_id: eventId,
-    p_event_type: name,
-    p_checkout_id: typeof checkout?.id === "string" ? checkout.id : "",
+    p_event_type: rpcType,
+    p_checkout_id: rpcCheckoutId,
     p_order_reference: externalReference,
     p_payload: event,
   });
@@ -79,6 +91,6 @@ Deno.serve(async req => {
   if (error) { console.error("Asaas reconciliation failed", error.message); return respond(500, "Retry event later"); }
   // Purchase conversion can only originate from the authenticated financial webhook,
   // after the order was marked paid, and only for users with marketing consent.
-  if(processed===true&&name==="CHECKOUT_PAID"&&typeof checkout?.id==="string")await sendPurchaseCapi(checkout.id);
+  if(processed===true&&rpcType==="CHECKOUT_PAID"&&rpcCheckoutId)await sendPurchaseCapi(rpcCheckoutId);
   return respond(200, "OK");
 });

@@ -22,7 +22,10 @@ export function isActiveGrant(grant: Grant, now: number) {
   return grant.revoked_at === null && Date.parse(grant.starts_at) <= now && (grant.expires_at === null || Date.parse(grant.expires_at) > now);
 }
 interface AuthState {
+  // Only set once the WhatsApp is verified: until then the person is not considered signed in.
   user: (User & { id: string; whatsapp: string }) | null;
+  // Credentials accepted, phone not verified yet. Used only by the verification step.
+  pendingUser: { id: string; whatsapp: string } | null;
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
@@ -50,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const version = useRef(0);
   const profileReady = useRef<Promise<void>>(Promise.resolve());
   const recovery = useRef(false);
+  const firstApply = useRef(true);
 
   useEffect(() => {
     let alive = true;
@@ -57,6 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const requestedRecovery = window.location.pathname === "/redefinir-senha" && recoveryLink.get("type") === "recovery" && !recoveryLink.has("error");
     const apply = (next: Session | null) => {
       const current = ++version.current;
+      // A session found at load that never finished phone verification is dropped, except on the
+      // invite and password-recovery pages, which rely on the session from the e-mail link.
+      const purgeUnverified = firstApply.current && !/^\/(ativar-conta|redefinir-senha)/.test(window.location.pathname);
+      firstApply.current = false;
       setSession(next);
       setProfile(null);
       setVerifiedWhatsApp(false);
@@ -71,6 +79,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfile(result.data);
             const status = await supabase.functions.invoke("solvchat-otp", { body: { action: "status" } });
             if (alive && version.current === current) setVerifiedWhatsApp(!status.error && status.data?.verified === true);
+            if (purgeUnverified && alive && version.current === current && !status.error && status.data?.verified === false && !recovery.current) {
+              await supabase.auth.signOut();
+              return;
+            }
             setError(result.data ? null : "Seu perfil não foi encontrado. Não é possível editar seus dados.");
           }
         } catch {
@@ -189,8 +201,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setVerifiedWhatsApp(false);
   });
   const phoneVerified = Boolean(session && verifiedWhatsApp);
-  const user = session ? { id: session.user.id, name: profile?.full_name || session.user.email?.split("@")[0] || "Minha conta", email: session.user.email || "", whatsapp: profile?.whatsapp || "" } : null;
-  return <AuthContext.Provider value={{ user, session, profile, loading, error, recoveryReady, phoneVerified, sendPhoneCode, verifyPhoneCode, login, signup, resetPassword, updatePassword, updateProfile, logout }}>{children}</AuthContext.Provider>;
+  const user = session && verifiedWhatsApp ? { id: session.user.id, name: profile?.full_name || session.user.email?.split("@")[0] || "Minha conta", email: session.user.email || "", whatsapp: profile?.whatsapp || "" } : null;
+  const pendingUser = session && !verifiedWhatsApp ? { id: session.user.id, whatsapp: profile?.whatsapp || "" } : null;
+  return <AuthContext.Provider value={{ user, pendingUser, session, profile, loading, error, recoveryReady, phoneVerified, sendPhoneCode, verifyPhoneCode, login, signup, resetPassword, updatePassword, updateProfile, logout }}>{children}</AuthContext.Provider>;
 }
 export function useAuth() {
   const context = useContext(AuthContext);

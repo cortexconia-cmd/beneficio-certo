@@ -1,4 +1,5 @@
 // OTP generated and validated server-side; delivery delegated to authenticated n8n webhook.
+// Verification is stored per login session (session_verifications): required at every sign-in and before every purchase.
 // Secrets: SOLVCHAT_OTP_PEPPER, N8N_SOLV_WEBHOOK_URL, N8N_SOLV_WEBHOOK_TOKEN.
 // Legacy SolvChat API remains fallback until the n8n URL and token are configured.
 import { createClient } from "npm:@supabase/supabase-js@2.57.0";
@@ -19,6 +20,14 @@ async function digest(text: string) {
 }
 const mobile = (value: string) => /^55(?:[1-9][0-9])[0-9]{8,9}$/.test(value);
 function validCode(value: unknown): value is string { return typeof value === "string" && /^\d{6}$/.test(value); }
+// The token was already validated by auth.getUser; only the session id claim is read from it here.
+function sessionIdOf(jwt: string) {
+  try {
+    const payload = JSON.parse(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.session_id === "string" ? payload.session_id : "";
+  } catch { return ""; }
+}
+const PURCHASE_WINDOW_MS = 15 * 60 * 1000;
 
 Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -27,19 +36,23 @@ Deno.serve(async req => {
   if (!bearer) return json({ error: "Entre para confirmar o celular." }, 401);
   const { data: identity, error: identityError } = await client.auth.getUser(bearer);
   if (identityError || !identity.user) return json({ error: "Sessão inválida." }, 401);
-  let payload: { action?: string; code?: string };
+  let payload: { action?: string; code?: string; purpose?: string };
   try { payload = await req.json(); } catch { return json({ error: "Solicitação inválida." }, 400); }
   if (!["send", "verify", "status"].includes(payload.action ?? "")) return json({ error: "Ação inválida." }, 400);
   const userId = identity.user.id;
   const { data: profile, error: profileError } = await client.from("profiles").select("whatsapp").eq("id", userId).maybeSingle();
   if (profileError || !profile || !mobile(profile.whatsapp ?? "")) return json({ error: "Informe um WhatsApp com DDD válido em sua conta." }, 422);
   const phone = profile.whatsapp as string;
-  const { data: record, error: stateError } = await client.from("phone_verifications")
-    .select("phone,verified_at").eq("user_id", userId).maybeSingle();
+  // Verification belongs to this login session: every new sign-in needs a fresh code, and so does every purchase.
+  const sessionId = sessionIdOf(bearer);
+  if (!sessionId) return json({ error: "Sessão inválida." }, 401);
+  const { data: session, error: stateError } = await client.from("session_verifications")
+    .select("verified_at,purchase_verified_at").eq("user_id", userId).eq("session_id", sessionId).maybeSingle();
   if (stateError) return json({ error: "Não foi possível consultar o cadastro." }, 500);
-  const verified = Boolean(record?.verified_at && record?.phone === phone);
-  if (payload.action === "status") return json({ verified });
-  if (verified) return json({ verified: true });
+  if (payload.action === "status") return json({
+    verified: Boolean(session?.verified_at),
+    purchaseVerified: Boolean(session?.purchase_verified_at && Date.now() - Date.parse(session.purchase_verified_at) < PURCHASE_WINDOW_MS),
+  });
   const pepper = Deno.env.get("SOLVCHAT_OTP_PEPPER");
   if (!pepper || pepper.length < 32) return json({ error: "Verificação por WhatsApp não configurada." }, 503);
 
@@ -129,5 +142,11 @@ Deno.serve(async req => {
     { p_user_id: userId, p_phone: phone, p_hash: hash });
   if (verifyError) return json({ error: "Não foi possível validar o código." }, 500);
   if (!accepted) return json({ error: "Código inválido, vencido ou limite de tentativas atingido." }, 400);
+  const { error: markError } = await client.from("session_verifications").upsert(
+    { user_id: userId, session_id: sessionId, ...(payload.purpose === "purchase" ? { purchase_verified_at: new Date().toISOString() } : { verified_at: new Date().toISOString() }) },
+    { onConflict: "user_id,session_id" });
+  if (markError) { console.error("Session verification not saved", markError.message); return json({ error: "Não foi possível concluir a verificação." }, 500); }
+  // Housekeeping: forget sessions created more than 30 days ago.
+  await client.from("session_verifications").delete().eq("user_id", userId).lt("created_at", new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString());
   return json({ verified: true });
 });

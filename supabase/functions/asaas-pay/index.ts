@@ -9,6 +9,14 @@ const appUrl = (Deno.env.get("APP_URL") ?? "https://beneficio-compass-guide.lova
 const origins = new Set([new URL(appUrl).origin, "https://beneficio-compass-guide.lovable.app"]);
 const apiBase = Deno.env.get("ASAAS_ENV") === "production" ? "https://api.asaas.com" : "https://api-sandbox.asaas.com";
 const PAID_STATUSES = new Set(["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"]);
+// The token was already validated by auth.getUser; only the session id claim is read from it here.
+function sessionIdOf(jwt: string) {
+  try {
+    const payload = JSON.parse(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.session_id === "string" ? payload.session_id : "";
+  } catch { return ""; }
+}
+const PURCHASE_WINDOW_MS = 15 * 60 * 1000;
 
 function answer(body: unknown, code: number, origin: string) {
   return new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json", "cache-control": "no-store", "access-control-allow-origin": origin, "access-control-allow-headers": "authorization, apikey, x-client-info, content-type", "access-control-allow-methods": "POST, OPTIONS" } });
@@ -77,9 +85,15 @@ Deno.serve(async req => {
   const user = identity.user;
   if (authError || !user || !user.email) return answer({ error: "Sessão inválida" }, 401, allowed);
   const { data: profile } = await db.from("profiles").select("whatsapp").eq("id", user.id).maybeSingle();
-  const { data: verification } = await db.from("phone_verifications").select("phone,verified_at").eq("user_id", user.id).maybeSingle();
-  if (!profile?.whatsapp || !verification?.verified_at || verification.phone !== profile.whatsapp)
-    return answer({ error: "Confirme seu WhatsApp com o código enviado antes de comprar." }, 403, allowed);
+  // Each purchase needs a code confirmed in this session within the last 15 minutes; it is spent when the charge is created.
+  const sessionId = sessionIdOf(token);
+  const { data: sv } = sessionId
+    ? await db.from("session_verifications").select("verified_at,purchase_verified_at").eq("user_id", user.id).eq("session_id", sessionId).maybeSingle()
+    : { data: null };
+  if (!profile?.whatsapp || !sv?.verified_at) return answer({ error: "Confirme seu WhatsApp para continuar.", code: "verification_required" }, 403, allowed);
+  if (!sv.purchase_verified_at || Date.now() - Date.parse(sv.purchase_verified_at) > PURCHASE_WINDOW_MS)
+    return answer({ error: "Confirme o código enviado ao seu WhatsApp para finalizar a compra.", code: "purchase_verification_required" }, 403, allowed);
+  const spendPurchaseCode = () => db.from("session_verifications").update({ purchase_verified_at: null }).eq("user_id", user.id).eq("session_id", sessionId);
   const { data: roles, error: rolesError } = await db.from("user_roles").select("role").eq("user_id", user.id).in("role", ["admin", "admin_master"]);
   if (rolesError) return answer({ error: "Não foi possível conferir seu acesso" }, 500, allowed);
   if (roles?.length) return answer({ error: "Sua conta administrativa já possui acesso Premium" }, 409, allowed);
@@ -166,6 +180,7 @@ Deno.serve(async req => {
       const reason = asaasReason(payment.data);
       return answer({ error: reason || "Não foi possível iniciar o pagamento. Tente novamente." }, payment.status >= 400 && payment.status < 500 ? 400 : 502, allowed);
     }
+    await spendPurchaseCode();
     const saved = await db.from("orders").update({ status: "checkout_created", external_checkout_id: paymentId, updated_at: new Date().toISOString() }).eq("id", order.id);
     if (saved.error) throw saved.error;
 

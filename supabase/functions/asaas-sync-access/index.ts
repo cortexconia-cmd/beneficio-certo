@@ -28,6 +28,11 @@ async function asaasGet(path: string, apiKey: string): Promise<Record<string, un
 
 // Asaas is the source of truth: the checkout itself reports PAID, or a payment tied to this exact order/checkout is received.
 async function isPaid(order: { id: string; external_checkout_id: string }, apiKey: string) {
+  // In-site charges store the Asaas payment id (pay_...) instead of a checkout id.
+  if (order.external_checkout_id.startsWith("pay_")) {
+    const payment = await asaasGet("/v3/payments/" + encodeURIComponent(order.external_checkout_id), apiKey);
+    return PAID_STATUSES.has(String(payment?.status)) && payment?.externalReference === order.id;
+  }
   const checkout = await asaasGet("/v3/checkouts/" + encodeURIComponent(order.external_checkout_id), apiKey);
   if (checkout?.status === "PAID") return true;
   const list = await asaasGet("/v3/payments?limit=20&externalReference=" + encodeURIComponent(order.id), apiKey);

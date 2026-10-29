@@ -4,39 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { LoginDialog } from "@/components/layout/LoginDialog";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
-import { trackEvent } from "@/components/ConsentTracking";
+import { CheckoutDialog } from "@/components/benefits/CheckoutDialog";
 
 export function PaymentPrompt({ open, onOpenChange, benefitName }: { open: boolean; onOpenChange: (open: boolean) => void; benefitName?: string }) {
   const { user, phoneVerified } = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  async function checkout() {
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  // The purchase happens inside the site (CheckoutDialog); nothing redirects to Asaas.
+  function checkout() {
     if (!user || !phoneVerified) { onOpenChange(false); setLoginOpen(true); return; }
-    setPending(true); setError("");
-    try {
-      const { data, error: failure } = await supabase.functions.invoke("asaas-create-checkout", { body: {} });
-      if (failure || !data?.url) {
-        // Edge Functions return actionable JSON errors, but the old UI hid all of them.
-        // Show only the API's public error message; never display authorization headers or tokens.
-        let reason = typeof data?.error === "string" ? data.error : "";
-        if (!reason && failure && "context" in failure) {
-          const context = failure.context as Response | undefined;
-          if (context && typeof context.clone === "function") {
-            try {
-              const response = await context.clone().json();
-              if (typeof response?.error === "string") reason = response.error;
-            } catch { /* A gateway/network failure may not have a JSON body. */ }
-          }
-        }
-        throw new Error(reason || "Não foi possível iniciar o pagamento. Verifique sua sessão ou tente novamente.");
-      }
-      const url = new URL(data.url);
-      if (url.protocol !== "https:" || !["asaas.com", "www.asaas.com", "sandbox.asaas.com", "checkout.asaas.com", "sandbox.checkout.asaas.com"].includes(url.hostname) && !url.hostname.endsWith(".asaas.com")) throw new Error("Link de pagamento inválido.");
-      await trackEvent("InitiateCheckout");
-      window.location.assign(url.toString());
-    } catch (e) { setError(e instanceof Error ? e.message : "Falha ao abrir pagamento."); setPending(false); }
+    onOpenChange(false);
+    setCheckoutOpen(true);
   }
   return <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -51,14 +29,14 @@ export function PaymentPrompt({ open, onOpenChange, benefitName }: { open: boole
         </DialogHeader>
         <div className="rounded-xl border border-border bg-muted/40 p-4 space-y-3 text-sm">
           <p className="flex gap-2"><ShieldCheck className="size-5 shrink-0 text-primary" /> Pagamento único para acessar os guias exclusivos.</p>
-          <p className="flex gap-2"><CreditCard className="size-5 shrink-0 text-primary" /> Pix ou cartão de crédito pelo Asaas.</p>
+          <p className="flex gap-2"><CreditCard className="size-5 shrink-0 text-primary" /> Pix ou cartão de crédito, sem sair do site.</p>
           <p className="text-xs text-muted-foreground">Somos uma plataforma privada de orientações. Os benefícios do governo são gratuitos e podem ser solicitados diretamente pelos canais oficiais.</p>
         </div>
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <Button onClick={() => void checkout()} disabled={pending} className="w-full">{pending ? "Preparando pagamento…" : user ? (phoneVerified ? "Desbloquear conteúdo" : "Confirmar celular para continuar") : "Cadastre-se para desbloquear"}</Button>
+        <Button onClick={checkout} className="w-full">{user ? (phoneVerified ? "Desbloquear conteúdo" : "Confirmar celular para continuar") : "Cadastre-se para desbloquear"}</Button>
         <Button variant="ghost" onClick={() => onOpenChange(false)}>Agora não</Button>
       </DialogContent>
     </Dialog>
+    <CheckoutDialog open={checkoutOpen} onOpenChange={setCheckoutOpen} />
     <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} initialMode={user ? "verificar" : "cadastrar"} />
   </>;
 }

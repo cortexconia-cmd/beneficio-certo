@@ -150,10 +150,18 @@ Deno.serve(async req => {
     let customerId = "";
     const found = await asaas("GET", "/v3/customers?limit=1&cpfCnpj=" + cpfCnpj, apiKey);
     const first = Array.isArray(found.data?.data) ? (found.data!.data as Row[])[0] : undefined;
-    if (first && typeof first.id === "string" && digits(first.cpfCnpj) === cpfCnpj) customerId = first.id;
+    if (first && typeof first.id === "string" && digits(first.cpfCnpj) === cpfCnpj) {
+      customerId = first.id;
+      // Messages to the buyer are ours (WhatsApp): keep Asaas from also sending e-mail/SMS notifications.
+      if (first.notificationDisabled !== true) {
+        const quiet = await asaas("POST", "/v3/customers/" + encodeURIComponent(customerId), apiKey, { notificationDisabled: true });
+        if (quiet.status !== 200) console.error("Asaas customer notifications not disabled", quiet.status);
+      }
+    }
     if (!customerId) {
       const created = await asaas("POST", "/v3/customers", apiKey, {
         name, cpfCnpj, email: user.email, mobilePhone: String(profile.whatsapp).replace(/^55/, ""), externalReference: user.id,
+        notificationDisabled: true,
       });
       if (typeof created.data?.id !== "string") {
         console.error("Asaas customer failed", created.status);

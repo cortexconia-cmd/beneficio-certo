@@ -14,22 +14,28 @@ import {
 } from "@/lib/payment-validators";
 
 type Method = "PIX" | "CREDIT_CARD";
-type Step = "form" | "pix" | "wait" | "done";
+type Step = "verify" | "form" | "pix" | "wait" | "done";
 const POLL_MS = 4000;
 const POLL_LIMIT_MS = 15 * 60 * 1000;
 
-async function readError(result: { data: { error?: string } | null; error: unknown }, fallback: string) {
+async function readFailure(result: { data: { error?: string } | null; error: unknown }, fallback: string) {
   const context = (result.error as { context?: Response } | null)?.context;
   if (context && typeof context.clone === "function") {
-    try { const body = await context.clone().json(); if (typeof body?.error === "string") return body.error; } catch { /* non-JSON body */ }
+    try {
+      const body = await context.clone().json();
+      if (typeof body?.error === "string") return { message: body.error as string, code: typeof body?.code === "string" ? body.code as string : "" };
+    } catch { /* non-JSON body */ }
   }
-  return result.data?.error ?? fallback;
+  return { message: result.data?.error ?? fallback, code: "" };
 }
 
 export function CheckoutDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<Step>("form");
+  const [step, setStep] = useState<Step>("verify");
+  const [code, setCode] = useState("");
+  const [codeInfo, setCodeInfo] = useState("");
+  const [codeBusy, setCodeBusy] = useState(false);
   const [method, setMethod] = useState<Method>("PIX");
   const [price, setPrice] = useState<number | null>(null);
   const [name, setName] = useState("");
@@ -48,7 +54,8 @@ export function CheckoutDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   // Nothing typed here is kept once the window closes, and card fields never leave this component's state.
   useEffect(() => {
     if (!open) return;
-    setStep("form"); setMethod("PIX"); setError(""); setPix(null); setCopied(false); setPending(false);
+    setStep("verify"); setCode(""); setCodeInfo(""); setMethod("PIX"); setError(""); setPix(null); setCopied(false); setPending(false);
+    void requestCode();
     setDoc(""); setCardNumber(""); setHolder(""); setExpiry(""); setCvv(""); setCep(""); setAddressNumber("");
     setName(profile?.full_name ?? "");
     let alive = true;
@@ -58,6 +65,29 @@ export function CheckoutDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Every purchase starts with a fresh WhatsApp code, even for people who already verified when they signed in.
+  async function requestCode() {
+    setCodeBusy(true); setError(""); setCodeInfo("");
+    try {
+      const result = await supabase.functions.invoke("solvchat-otp", { body: { action: "send" } });
+      if (result.error || !result.data?.sent) throw new Error((await readFailure(result, "Não foi possível enviar o código pelo WhatsApp.")).message);
+      setCodeInfo("Enviamos um código de 6 dígitos para o seu WhatsApp.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível enviar o código."); }
+    finally { setCodeBusy(false); }
+  }
+  async function confirmCode(event: React.FormEvent) {
+    event.preventDefault();
+    if (codeBusy) return;
+    if (!/^\d{6}$/.test(code)) { setError("Digite o código de 6 dígitos."); return; }
+    setCodeBusy(true); setError("");
+    try {
+      const result = await supabase.functions.invoke("solvchat-otp", { body: { action: "verify", code, purpose: "purchase" } });
+      if (result.error || result.data?.verified !== true) throw new Error((await readFailure(result, "Código inválido ou expirado.")).message);
+      setCode(""); setCodeInfo(""); setStep("form");
+    } catch (e) { setError(e instanceof Error ? e.message : "Código inválido ou expirado."); }
+    finally { setCodeBusy(false); }
+  }
 
   function finish() {
     setStep("done");
@@ -110,7 +140,11 @@ export function CheckoutDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           } };
       void trackEvent("InitiateCheckout");
       const result = await supabase.functions.invoke("asaas-pay", { body });
-      if (result.error || !result.data) throw new Error(await readError(result, "Não foi possível iniciar o pagamento. Tente novamente."));
+      if (result.error || !result.data) {
+        const failure = await readFailure(result, "Não foi possível iniciar o pagamento. Tente novamente.");
+        if (failure.code === "purchase_verification_required") { setStep("verify"); setCode(""); void requestCode(); }
+        throw new Error(failure.message);
+      }
       setCardNumber(""); setCvv(""); setExpiry("");
       if (result.data.method === "PIX") { setPix({ qrCode: result.data.qrCode, copyPaste: result.data.copyPaste, expiresAt: result.data.expiresAt ?? null }); setStep("pix"); }
       else if (result.data.approved) finish();
@@ -136,7 +170,22 @@ export function CheckoutDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!pending) onOpenChange(next); }}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
-        {step === "done" ? (
+        {step === "verify" ? (
+          <form onSubmit={(e) => void confirmCode(e)} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Confirme seu WhatsApp</DialogTitle>
+              <DialogDescription>Por segurança, confirmamos sua identidade antes de cada compra{profile?.whatsapp ? <> com um código enviado para o número final <strong>{profile.whatsapp.slice(-4)}</strong></> : ""}.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="co-code">Código recebido no WhatsApp</Label>
+              <Input id="co-code" required inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" value={code} onChange={(e) => setCode(onlyDigits(e.target.value))} />
+            </div>
+            {codeInfo && <p role="status" className="text-sm text-primary">{codeInfo}</p>}
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" className="w-full" disabled={codeBusy}>{codeBusy ? "Aguarde…" : "Confirmar código"}</Button>
+            <Button type="button" variant="outline" className="w-full" disabled={codeBusy} onClick={() => void requestCode()}>Reenviar código pelo WhatsApp</Button>
+          </form>
+        ) : step === "done" ? (
           <div className="space-y-4 py-4 text-center">
             <CheckCircle2 className="mx-auto size-14 text-primary" />
             <DialogTitle className="text-2xl">Pagamento confirmado</DialogTitle>

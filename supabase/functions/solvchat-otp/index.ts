@@ -62,10 +62,20 @@ Deno.serve(async req => {
       return json({ error: "Endpoint HTTPS de envio inválido." }, 503);
     const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
     const hash = await digest(pepper + ":" + userId + ":" + phone + ":" + code);
-    const { data: reserved, error: limitError } = await client.rpc("solvchat_reserve_code",
+    // Limits: 60s between sends; after 5 requests wait 1 hour; 3 more are allowed, then blocked until the next day (Brasília).
+    const { data: reserved, error: limitError } = await client.rpc("solvchat_reserve_code_v2",
       { p_user_id: userId, p_phone: phone, p_hash: hash });
     if (limitError) return json({ error: "Não foi possível solicitar código." }, 500);
-    if (!reserved) return json({ error: "Aguarde antes de solicitar outro código. O limite é de 5 envios por dia." }, 429);
+    if (!reserved?.ok) {
+      const minutes = Math.max(1, Math.ceil((Date.parse(String(reserved?.retry_at)) - Date.now()) / 60000));
+      if (reserved?.reason === "hourly_limit")
+        return json({ error: "Você pediu 5 códigos. Por segurança, aguarde " + (minutes >= 60 ? "1 hora" : minutes + " minuto" + (minutes > 1 ? "s" : "")) + " para pedir outro.", retryAt: reserved.retry_at }, 429);
+      if (reserved?.reason === "daily_limit")
+        return json({ error: "Limite de solicitações de código atingido por hoje. Tente novamente amanhã.", retryAt: reserved.retry_at }, 429);
+      if (reserved?.reason === "cooldown")
+        return json({ error: "Aguarde 1 minuto antes de pedir outro código.", retryAt: reserved.retry_at }, 429);
+      return json({ error: "Não foi possível solicitar código." }, 422);
+    }
     // A code that never reached the user must not burn the daily quota or the 60s cooldown.
     const release = async () => {
       const { data: current } = await client.from("phone_verifications").select("sends_in_window").eq("user_id", userId).maybeSingle();

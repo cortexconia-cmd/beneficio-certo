@@ -22,7 +22,7 @@ interface Props {
 }
 
 export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Props) {
-  const { login, signup, resetPassword, sendPhoneCode, verifyPhoneCode, loading, user } = useAuth();
+  const { login, signup, resetPassword, sendPhoneCode, verifyPhoneCode, logout, loading, pendingUser } = useAuth();
   const [mode, setMode] = useState<"entrar" | "cadastrar" | "recuperar" | "verificar">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -42,7 +42,11 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (loading) return; if (!next) { setPassword(""); setError(""); setSuccess(""); } onOpenChange(next); }}>
+    <Dialog open={open} onOpenChange={(next) => { if (loading) return; if (!next) {
+      // Closing the code screen abandons the sign-in: no session survives without a verified phone.
+      if (mode === "verificar" && pendingUser) void logout().catch(() => {});
+      setPassword(""); setError(""); setSuccess("");
+    } onOpenChange(next); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{mode === "entrar" ? "Entrar na sua conta" : mode === "cadastrar" ? "Criar sua conta" : mode === "verificar" ? "Confirme seu celular" : "Recuperar senha"}</DialogTitle>
@@ -56,7 +60,7 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
             if (loading) return;
             setError(""); setSuccess("");
             try {
-              if (mode === "entrar") { const verified = await login(email, password); setPassword(""); if (!verified) { setWhatsapp(user?.whatsapp || whatsapp); await requestCode("Enviamos um código de confirmação pelo WhatsApp."); } else onOpenChange(false); }
+              if (mode === "entrar") { const verified = await login(email, password); setPassword(""); if (!verified) { setWhatsapp(pendingUser?.whatsapp || whatsapp); await requestCode("Enviamos um código de confirmação pelo WhatsApp."); } else onOpenChange(false); }
               else if (mode === "cadastrar") {
                 const confirm = await signup(name, whatsapp, email, password);
                 setPassword("");
@@ -101,7 +105,7 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
             </div>
           </div>}
           {mode === "verificar" && <>
-            <div className="space-y-2"><Label htmlFor="sms-phone">Número do celular com DDD</Label><Input id="sms-phone" type="tel" required readOnly value={user?.whatsapp || whatsapp} autoComplete="tel" placeholder="(11) 99999-9999" /></div>
+            <div className="space-y-2"><Label htmlFor="sms-phone">Número do celular com DDD</Label><Input id="sms-phone" type="tel" required readOnly value={pendingUser?.whatsapp || whatsapp} autoComplete="tel" placeholder="(11) 99999-9999" /></div>
             <div className="space-y-2"><Label htmlFor="sms-code">Código recebido no WhatsApp</Label><Input id="sms-code" required inputMode="numeric" autoComplete="one-time-code" maxLength={8} pattern="[0-9]{6,8}" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" /></div>
             <Button type="button" variant="outline" className="w-full" disabled={loading} onClick={async () => { setError(""); setSuccess(""); try { await sendPhoneCode(whatsapp); setSuccess("Novo código solicitado pelo WhatsApp."); } catch (e) { setError(e instanceof Error ? e.message : "Falha ao reenviar SMS."); } }}>Reenviar código pelo WhatsApp</Button>
           </>}

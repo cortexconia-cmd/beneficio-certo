@@ -41,6 +41,18 @@ function asaasReason(data: Row | null): string {
   const text = errors.map(e => e.description).find((d): d is string => typeof d === "string");
   return text ? text.slice(0, 200) : "";
 }
+// Turns off, on every channel, the notifications Asaas would send to this customer (new charge, reminders, overdue, confirmation).
+// Best effort: the customer is also created with notificationDisabled, so a failure here never blocks the purchase.
+async function silenceCustomer(customerId: string, apiKey: string) {
+  const list = await asaas("GET", "/v3/customers/" + encodeURIComponent(customerId) + "/notifications", apiKey);
+  const items = Array.isArray(list.data?.data) ? list.data!.data as Row[] : [];
+  const notifications = items.filter(n => typeof n.id === "string").map(n => ({
+    id: n.id, emailEnabledForCustomer: false, smsEnabledForCustomer: false, phoneCallEnabledForCustomer: false, whatsappEnabledForCustomer: false,
+  }));
+  if (!notifications.length) { console.error("Asaas customer notification settings not found", list.status); return; }
+  const res = await asaas("POST", "/v3/notifications/batch", apiKey, { customer: customerId, notifications });
+  if (res.status !== 200) console.error("Asaas customer notifications not switched off", res.status);
+}
 const digits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 function validCpf(value: string) {
   if (!/^\d{11}$/.test(value) || /^(\d)\1{10}$/.test(value)) return false;
@@ -150,12 +162,14 @@ Deno.serve(async req => {
     let customerId = "";
     const found = await asaas("GET", "/v3/customers?limit=1&cpfCnpj=" + cpfCnpj, apiKey);
     const first = Array.isArray(found.data?.data) ? (found.data!.data as Row[])[0] : undefined;
+    // Messages to the buyer are ours (WhatsApp): Asaas must never send its own e-mail, SMS, WhatsApp or calls.
+    let needsQuiet = false;
     if (first && typeof first.id === "string" && digits(first.cpfCnpj) === cpfCnpj) {
       customerId = first.id;
-      // Messages to the buyer are ours (WhatsApp): keep Asaas from also sending e-mail/SMS notifications.
       if (first.notificationDisabled !== true) {
         const quiet = await asaas("POST", "/v3/customers/" + encodeURIComponent(customerId), apiKey, { notificationDisabled: true });
         if (quiet.status !== 200) console.error("Asaas customer notifications not disabled", quiet.status);
+        needsQuiet = true;
       }
     }
     if (!customerId) {
@@ -169,7 +183,10 @@ Deno.serve(async req => {
         return answer({ error: asaasReason(created.data) || "Não foi possível validar seus dados. Confira o CPF e tente de novo." }, 400, allowed);
       }
       customerId = created.data.id;
+      needsQuiet = true;
     }
+    // Belt and braces, before the charge exists: also switch off every individual notification of this customer.
+    if (needsQuiet) await silenceCustomer(customerId, apiKey);
 
     const charge: Row = {
       customer: customerId, billingType: method, value: amount / 100, dueDate: todayInBrazil(),

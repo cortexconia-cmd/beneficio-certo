@@ -137,11 +137,21 @@ Deno.serve(async req => {
     }
   }
   if (!validCode(payload.code)) return json({ error: "Digite o código de 6 dígitos." }, 400);
-  const hash = await digest(pepper + ":" + userId + ":" + phone + ":" + payload.code);
-  const { data: accepted, error: verifyError } = await client.rpc("solvchat_verify_code",
-    { p_user_id: userId, p_phone: phone, p_hash: hash });
-  if (verifyError) return json({ error: "Não foi possível validar o código." }, 500);
-  if (!accepted) return json({ error: "Código inválido, vencido ou limite de tentativas atingido." }, 400);
+  // TEMPORARY TEST CODE (see docs/CODIGO_DE_TESTE_TEMPORARIO.md): accepted only while the OTP_TEST_CODE secret exists,
+  // and, when OTP_TEST_EMAILS is set, only for those accounts. Delete the secret to switch it off.
+  const testCode = Deno.env.get("OTP_TEST_CODE")?.trim() ?? "";
+  const testEmails = (Deno.env.get("OTP_TEST_EMAILS") ?? "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+  const usedTestCode = /^\d{6}$/.test(testCode) && payload.code === testCode &&
+    (testEmails.length === 0 || testEmails.includes((identity.user.email ?? "").toLowerCase()));
+  if (usedTestCode) {
+    console.warn("OTP test code accepted for user", userId);
+  } else {
+    const hash = await digest(pepper + ":" + userId + ":" + phone + ":" + payload.code);
+    const { data: accepted, error: verifyError } = await client.rpc("solvchat_verify_code",
+      { p_user_id: userId, p_phone: phone, p_hash: hash });
+    if (verifyError) return json({ error: "Não foi possível validar o código." }, 500);
+    if (!accepted) return json({ error: "Código inválido, vencido ou limite de tentativas atingido." }, 400);
+  }
   const { error: markError } = await client.from("session_verifications").upsert(
     { user_id: userId, session_id: sessionId, ...(payload.purpose === "purchase" ? { purchase_verified_at: new Date().toISOString() } : { verified_at: new Date().toISOString() }) },
     { onConflict: "user_id,session_id" });

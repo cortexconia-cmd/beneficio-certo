@@ -60,10 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const requestedRecovery = window.location.pathname === "/redefinir-senha" && recoveryLink.get("type") === "recovery" && !recoveryLink.has("error");
     const apply = (next: Session | null) => {
       const current = ++version.current;
-      // A session found at load that never finished phone verification is dropped, except on the
-      // invite and password-recovery pages, which rely on the session from the e-mail link.
-      const purgeUnverified = firstApply.current && !/^\/(ativar-conta|redefinir-senha)/.test(window.location.pathname);
-      firstApply.current = false;
       setSession(next);
       setProfile(null);
       setVerifiedWhatsApp(false);

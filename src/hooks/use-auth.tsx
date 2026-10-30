@@ -53,7 +53,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const version = useRef(0);
   const profileReady = useRef<Promise<void>>(Promise.resolve());
   const recovery = useRef(false);
-  const firstApply = useRef(true);
 
   useEffect(() => {
     let alive = true;
@@ -79,10 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfile(result.data);
             const status = await supabase.functions.invoke("solvchat-otp", { body: { action: "status" } });
             if (alive && version.current === current) setVerifiedWhatsApp(!status.error && status.data?.verified === true);
-            if (purgeUnverified && alive && version.current === current && !status.error && status.data?.verified === false && !recovery.current) {
-              await supabase.auth.signOut();
-              return;
-            }
             setError(result.data ? null : "Seu perfil não foi encontrado. Não é possível editar seus dados.");
           }
         } catch {
@@ -160,10 +155,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (result.error) throw new Error("Não foi possível cadastrar. Verifique seus dados.");
     if (!result.data.session) return false; // Hosted Supabase may require email verification before phone OTP.
-    // Trigger on auth.users creates the profile; wait until it becomes visible.
-    const { data: profileAfterSignup, error: profileError } = await supabase.from("profiles")
-      .select("id").eq("id", result.data.user?.id ?? "").maybeSingle();
-    if (profileError || !profileAfterSignup) throw new Error("Conta criada, mas o perfil ainda não está disponível. Faça login novamente.");
+    // The auth trigger can finish after signUp returns. Keep the newly created
+    // session and allow the profile a short time to become visible instead of
+    // asking the customer to create their account twice.
+    let profileFound = false;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const { data, error: profileError } = await supabase.from("profiles")
+        .select("id").eq("id", result.data.user?.id ?? "").maybeSingle();
+      if (!profileError && data) { profileFound = true; break; }
+      if (attempt < 5) await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    if (!profileFound) throw new Error("Conta criada, mas o perfil ainda está sendo preparado. Aguarde um instante e entre com seu e-mail e senha; não é necessário criar outra conta.");
     // The code is requested by the caller so a delivery failure does not look like a failed signup.
     return true;
   });

@@ -29,7 +29,7 @@ export const Route = createFileRoute("/beneficios/$slug")({
     return { benefit: b ?? null, slug: params.slug };
   },
   head: ({ loaderData }) => ({
-    meta: loaderData
+    meta: loaderData?.benefit
       ? [
           { title: `${loaderData.benefit.nome} — Projeto + Benefícios` },
           { name: "description", content: loaderData.benefit.descricaoCurta },

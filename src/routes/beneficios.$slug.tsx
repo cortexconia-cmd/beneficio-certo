@@ -166,12 +166,12 @@ function BenefitPage() {
 
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-8 sm:py-12 space-y-8 sm:space-y-12">
         {/* O que é */}
-        <Section title="O que é">
+        <Section title="O que é" show={!!benefit.oQueE}>
           <p className="text-foreground/80 leading-relaxed">{benefit.oQueE}</p>
         </Section>
 
         {/* Quem tem direito */}
-        <Section title="Quem tem direito">
+        <Section title="Quem tem direito" show={benefit.quemTemDireito.length > 0}>
           <ul className="space-y-3">
             {benefit.quemTemDireito.map((item, i) => (
               <li key={i} className="flex items-start gap-3">
@@ -185,7 +185,7 @@ function BenefitPage() {
         </Section>
 
         {/* Documentos */}
-        <Section title="Documentos necessários">
+        <Section title="Documentos necessários" show={benefit.documentos.length > 0}>
           <div className="rounded-2xl border border-border bg-card p-5">
             <ul className="space-y-3">
               {benefit.documentos.map((doc, i) => (
@@ -199,7 +199,7 @@ function BenefitPage() {
         </Section>
 
         {/* Como solicitar */}
-        <Section title="Como solicitar">
+        <Section title="Como solicitar" show={benefit.comoSolicitar.length > 0}>
           <ol className="space-y-4">
             {benefit.comoSolicitar.map((passo, i) => (
               <li
@@ -219,7 +219,7 @@ function BenefitPage() {
         </Section>
 
         {/* Erros comuns */}
-        <Section title="Erros comuns">
+        <Section title="Erros comuns" show={benefit.errosComuns.length > 0}>
           <div className="grid gap-3 sm:grid-cols-2">
             {benefit.errosComuns.map((erro, i) => (
               <div key={i} className="rounded-2xl border border-red-200 bg-red-50/60 p-4">
@@ -234,7 +234,7 @@ function BenefitPage() {
         </Section>
 
         {/* Dicas */}
-        <Section title="Dicas importantes">
+        <Section title="Dicas importantes" show={benefit.dicas.length > 0}>
           <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50 p-5">
             <div className="flex items-center gap-2 text-amber-700 mb-3">
               <Lightbulb className="h-5 w-5" />
@@ -252,7 +252,7 @@ function BenefitPage() {
         </Section>
 
         {/* FAQ */}
-        <Section title="Perguntas frequentes">
+        <Section title="Perguntas frequentes" show={benefit.faq.length > 0}>
           <Accordion type="single" collapsible className="rounded-2xl border border-border bg-card px-5">
             {benefit.faq.map((f, i) => (
               <AccordionItem key={i} value={`item-${i}`} className="border-border last:border-0">
@@ -291,7 +291,9 @@ function BenefitPage() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// A section without content is not rendered: no heading is shown without text under it.
+function Section({ title, show = true, children }: { title: string; show?: boolean; children: React.ReactNode }) {
+  if (!show) return null;
   return (
     <section>
       <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-3 sm:mb-4">{title}</h2>

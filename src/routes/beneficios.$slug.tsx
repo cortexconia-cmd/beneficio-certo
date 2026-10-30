@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useBenefitAccess } from "@/hooks/use-benefit-access";
+import { useBenefitAccess, isFreeBenefit } from "@/hooks/use-benefit-access";
 import { PaymentPrompt } from "@/components/benefits/PaymentPrompt";
 import { LockKeyhole } from "lucide-react";
 import { useLiveBenefits } from "@/hooks/use-live-benefits";
@@ -66,7 +66,7 @@ function BenefitPage() {
   const [loginOpen, setLoginOpen] = useState(false);
   const detail = useQuery({
     queryKey: ["original-benefit-guide", user?.id, meta.slug],
-    enabled: !!user && !locked && !checking,
+    enabled: (!!user || isFreeBenefit(meta.slug)) && !locked && !checking,
     retry: false,
     queryFn: async () => {
       const slug = meta.slug === "bpc" ? "bpc-loas" : meta.slug;
@@ -96,7 +96,7 @@ function BenefitPage() {
   };
 
   // Signed out is the default state: no guide is requested from the database.
-  if (!checking && !user) return <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
+  if (!checking && !user && !isFreeBenefit(meta.slug)) return <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
     <h1 className="text-3xl font-bold">{meta.nome}</h1>
     <p className="text-muted-foreground">Entre ou crie sua conta para acessar este guia.</p>
     <button className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground" onClick={() => setLoginOpen(true)}>Entrar ou criar conta</button>

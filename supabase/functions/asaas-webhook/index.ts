@@ -11,7 +11,7 @@ async function sha256(raw:string){
 }
 async function sendPurchaseCapi(checkoutId:string){
  const token=Deno.env.get("META_CAPI_TOKEN"), pixel=Deno.env.get("META_PIXEL_ID")??"";
- if(!token||!/^\\d{10,20}$/.test(pixel))return;
+ if(!token||!/^\d{10,20}$/.test(pixel))return;
  const {data:order,error:orderError}=await db.from("orders").select("id,user_id,amount_cents,status")
    .eq("external_checkout_id",checkoutId).maybeSingle();
  if(orderError||!order||order.status!=="paid")return;

@@ -20,7 +20,7 @@ Deno.serve(async req=>{
   const pixel=Deno.env.get("META_PIXEL_ID")??"";
   const {data:setting}=await db.from("platform_settings").select("value").eq("key","catalog_price_cents").maybeSingle();
   const amount=setting?.value;
-  return response(origin,{pixelId:p.consent_marketing===true&&/^\\d{10,20}$/.test(pixel)?pixel:null,
+  return response(origin,{pixelId:p.consent_marketing===true&&/^\d{10,20}$/.test(pixel)?pixel:null,
     priceCents:Number.isSafeInteger(amount)&&amount>=100&&amount<=100000?amount:2990});
  }
  if(!isUuid(p.visitor_id)||!isUuid(p.session_id))return response(origin,{error:"Identificadores inválidos"},400);
@@ -51,6 +51,11 @@ Deno.serve(async req=>{
   await db.from("user_privacy_preferences").upsert({user_id:userId,consent_marketing:p.consent_marketing===true,updated_at:new Date().toISOString()});
  }
  if(kind==="visit"||kind==="identify"){
+  // Visits made before signing in belong to the same person: link them so the first origin survives sign-up.
+  if(userId){
+   await db.from("attributions").update({user_id:userId}).eq("visitor_id",p.visitor_id).is("user_id",null);
+   await db.from("visitor_sessions").update({user_id:userId}).eq("visitor_id",p.visitor_id).is("user_id",null);
+  }
   const utms=isRecord(p.utms)?p.utms:{};
   if(Object.values(utms).some(x=>typeof x!=="string"&&x!==null))return response(origin,{error:"UTMs inválidas"},400);
   if(Object.keys(utms).length && Object.values(utms).some(v=>v)){
@@ -58,15 +63,18 @@ Deno.serve(async req=>{
    for(const key of ["utm_source","utm_medium","utm_campaign","utm_content","utm_term","campaign_id","adset_id","ad_id","fbclid","fbc","fbp"]){
      attrs[key]=str(utms[key],120);
    }
-   // Avoid duplicate attribution on retries; keep the earliest session attribution.
-   const {count}=await db.from("attributions").select("id",{count:"exact",head:true}).eq("session_id",p.session_id);
-   if(!count)await db.from("attributions").insert(attrs);
-   else if(userId)await db.from("attributions").update({user_id:userId}).eq("session_id",p.session_id).is("user_id",null);
+   // Every change of origin is a new touch. First origin = earliest row of the visitor, last origin = latest row.
+   // A retry with the same origin is not recorded twice.
+   const fields=["utm_source","utm_medium","utm_campaign","utm_content","utm_term","campaign_id","adset_id","ad_id","fbclid"];
+   const {data:last}=await db.from("attributions").select(fields.join(",")).eq("visitor_id",p.visitor_id)
+     .order("captured_at",{ascending:false}).limit(1).maybeSingle();
+   const same=!!last&&fields.every(k=>(last[k]??null)===(attrs[k]??null));
+   if(!same)await db.from("attributions").insert(attrs);
   }
  }
  if(kind==="event"){
   const eventName=str(p.event_name,80);
-  if(!eventName||!["PageView","ViewContent","registration_started","Lead","InitiateCheckout"].includes(eventName)||!isUuid(p.event_id))return response(origin,{error:"Evento inválido"},400);
+  if(!eventName||!["PageView","ViewContent","registration_started","Lead","CompleteRegistration","InitiateCheckout"].includes(eventName)||!isUuid(p.event_id))return response(origin,{error:"Evento inválido"},400);
   const {error}=await db.from("tracking_events").upsert({
    event_id:p.event_id,visitor_id:p.visitor_id,session_id:p.session_id,user_id:userId,
    event_name:eventName,page_path:str(p.path,250),properties:{source:"website"}
@@ -75,7 +83,7 @@ Deno.serve(async req=>{
   if(p.consent_marketing===true){
     const pixel=Deno.env.get("META_PIXEL_ID")??"";
     const token=Deno.env.get("META_CAPI_TOKEN");
-    if(eventName!=="registration_started"&&/^\\d{10,20}$/.test(pixel)&&token){
+    if(eventName!=="registration_started"&&/^\d{10,20}$/.test(pixel)&&token){
      const metaEvent=eventName;
      const metaBody={data:[{
        event_name:metaEvent,event_time:Math.floor(Date.now()/1000),event_id:p.event_id,

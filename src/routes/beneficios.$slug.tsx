@@ -1,4 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { trackEvent } from "@/components/ConsentTracking";
 import * as Icons from "lucide-react";
 import { ArrowLeft, Check, AlertTriangle, Lightbulb, FileText } from "lucide-react";
 import { getBenefit } from "@/data/benefits";
@@ -13,7 +14,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useBenefitAccess } from "@/hooks/use-benefit-access";
@@ -59,6 +60,7 @@ function BenefitPage() {
   const meta = liveBenefits.find(b => b.slug === originalMeta.slug) ?? originalMeta;
   const { user, canOpen, checking } = useBenefitAccess();
   const locked = !canOpen(meta.slug);
+  useEffect(() => { void trackEvent("ViewContent"); }, [meta.slug]);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const detail = useQuery({
     queryKey: ["original-benefit-guide", user?.id, meta.slug],

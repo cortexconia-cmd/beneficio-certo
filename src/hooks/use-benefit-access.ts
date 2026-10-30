@@ -61,7 +61,7 @@ export function useBenefitAccess() {
     checking: authLoading || (!!user && (access.isPending || access.isFetching || staffRole.isPending || staffRole.isFetching)),
     error: access.error,
     canOpen: (slug: string, benefitId?: string) =>
-      isFreeBenefit(slug) || (hasCatalog && !access.isError) ||
+      (!!user && isFreeBenefit(slug)) || (hasCatalog && !access.isError) ||
       (!!user && phoneVerified && !!benefitId && !!access.data?.some(g => g.access_scope === "benefit" && g.benefit_id === benefitId)),
     refresh: async () => { await Promise.all([access.refetch(), staffRole.refetch()]); },
   };

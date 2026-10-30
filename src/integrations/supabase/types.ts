@@ -507,6 +507,24 @@ export type Database = {
           },
         ]
       }
+      user_favorites: {
+        Row: {
+          benefit_slug: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          benefit_slug: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          benefit_slug?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

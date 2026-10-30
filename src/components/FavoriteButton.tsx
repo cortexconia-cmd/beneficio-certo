@@ -8,22 +8,27 @@ interface Props {
   size?: "sm" | "md";
 }
 
+// Favoriting needs a signed-in account. Signed out, the button is shown disabled.
 export function FavoriteButton({ slug, className, size = "md" }: Props) {
-  const { isFavorite, toggle } = useFavorites();
+  const { isFavorite, toggle, loggedIn } = useFavorites();
   const active = isFavorite(slug);
+  const label = !loggedIn ? "Entre na sua conta para favoritar" : active ? "Remover dos favoritos" : "Adicionar aos favoritos";
 
   return (
     <button
       type="button"
-      aria-label={active ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+      disabled={!loggedIn}
+      title={label}
+      aria-label={label}
       aria-pressed={active}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        toggle(slug);
+        void toggle(slug);
       }}
       className={cn(
         "inline-flex items-center justify-center rounded-full bg-white/95 backdrop-blur transition-all hover:scale-110 active:scale-95 shadow-soft",
+        loggedIn ? "" : "cursor-not-allowed opacity-50 hover:scale-100",
         size === "sm" ? "h-8 w-8" : "h-10 w-10",
         className,
       )}

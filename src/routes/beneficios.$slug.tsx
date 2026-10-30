@@ -6,6 +6,7 @@ import { getBenefit } from "@/data/benefits";
 import { getCategory } from "@/data/categories";
 import type { Benefit } from "@/types/benefit";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { LoginDialog } from "@/components/layout/LoginDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   Accordion,
@@ -62,9 +63,10 @@ function BenefitPage() {
   const locked = !canOpen(meta.slug);
   useEffect(() => { void trackEvent("ViewContent"); }, [meta.slug]);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   const detail = useQuery({
     queryKey: ["original-benefit-guide", user?.id, meta.slug],
-    enabled: !locked && !checking,
+    enabled: !!user && !locked && !checking,
     retry: false,
     queryFn: async () => {
       const slug = meta.slug === "bpc" ? "bpc-loas" : meta.slug;
@@ -93,6 +95,14 @@ function BenefitPage() {
     faq: Array.isArray(extras.faq) ? extras.faq : [],
   };
 
+  // Signed out is the default state: no guide is requested from the database.
+  if (!checking && !user) return <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
+    <h1 className="text-3xl font-bold">{meta.nome}</h1>
+    <p className="text-muted-foreground">Entre ou crie sua conta para acessar este guia.</p>
+    <button className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground" onClick={() => setLoginOpen(true)}>Entrar ou criar conta</button>
+    <div><Link to="/beneficios" className="text-primary underline">Voltar ao catálogo</Link></div>
+    <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
+  </div>;
   if (checking || locked) return <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
     <div className="mx-auto grid size-20 place-items-center rounded-2xl bg-primary-soft text-primary"><LockKeyhole className="size-10"/></div>
     <h1 className="text-3xl font-bold">{meta.nome}</h1>

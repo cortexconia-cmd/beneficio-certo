@@ -51,6 +51,11 @@ Deno.serve(async req=>{
   await db.from("user_privacy_preferences").upsert({user_id:userId,consent_marketing:p.consent_marketing===true,updated_at:new Date().toISOString()});
  }
  if(kind==="visit"||kind==="identify"){
+  // Visits made before signing in belong to the same person: link them so the first origin survives sign-up.
+  if(userId){
+   await db.from("attributions").update({user_id:userId}).eq("visitor_id",p.visitor_id).is("user_id",null);
+   await db.from("visitor_sessions").update({user_id:userId}).eq("visitor_id",p.visitor_id).is("user_id",null);
+  }
   const utms=isRecord(p.utms)?p.utms:{};
   if(Object.values(utms).some(x=>typeof x!=="string"&&x!==null))return response(origin,{error:"UTMs inválidas"},400);
   if(Object.keys(utms).length && Object.values(utms).some(v=>v)){
@@ -58,10 +63,13 @@ Deno.serve(async req=>{
    for(const key of ["utm_source","utm_medium","utm_campaign","utm_content","utm_term","campaign_id","adset_id","ad_id","fbclid","fbc","fbp"]){
      attrs[key]=str(utms[key],120);
    }
-   // Avoid duplicate attribution on retries; keep the earliest session attribution.
-   const {count}=await db.from("attributions").select("id",{count:"exact",head:true}).eq("session_id",p.session_id);
-   if(!count)await db.from("attributions").insert(attrs);
-   else if(userId)await db.from("attributions").update({user_id:userId}).eq("session_id",p.session_id).is("user_id",null);
+   // Every change of origin is a new touch. First origin = earliest row of the visitor, last origin = latest row.
+   // A retry with the same origin is not recorded twice.
+   const fields=["utm_source","utm_medium","utm_campaign","utm_content","utm_term","campaign_id","adset_id","ad_id","fbclid"];
+   const {data:last}=await db.from("attributions").select(fields.join(",")).eq("visitor_id",p.visitor_id)
+     .order("captured_at",{ascending:false}).limit(1).maybeSingle();
+   const same=!!last&&fields.every(k=>(last[k]??null)===(attrs[k]??null));
+   if(!same)await db.from("attributions").insert(attrs);
   }
  }
  if(kind==="event"){

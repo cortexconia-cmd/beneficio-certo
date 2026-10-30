@@ -84,15 +84,19 @@ function BenefitPage() {
   const content = detail.data;
   const extras = content?.important && !Array.isArray(content.important) && typeof content.important === "object" ?
     content.important as { errosComuns?: Benefit["errosComuns"]; dicas?: string[]; faq?: Benefit["faq"] } : {};
+  // The database text is used when it exists; otherwise the catalog text is shown. The page never fails to render.
   const benefit: Benefit = {
     ...meta,
-    oQueE: typeof content?.what_is === "string" ? content.what_is : "",
-    quemTemDireito: Array.isArray(content?.who_qualifies) ? content.who_qualifies.filter((x): x is string => typeof x === "string") : [],
-    documentos: Array.isArray(content?.documents) ? content.documents.filter((x): x is string => typeof x === "string") : [],
-    comoSolicitar: Array.isArray(content?.how_to_apply) ? content.how_to_apply as unknown as Benefit["comoSolicitar"] : [],
-    errosComuns: Array.isArray(extras.errosComuns) ? extras.errosComuns : [],
-    dicas: Array.isArray(extras.dicas) ? extras.dicas : [],
-    faq: Array.isArray(extras.faq) ? extras.faq : [],
+    oQueE: typeof content?.what_is === "string" && content.what_is ? content.what_is : meta.oQueE,
+    quemTemDireito: Array.isArray(content?.who_qualifies) && content.who_qualifies.length
+      ? content.who_qualifies.filter((x): x is string => typeof x === "string") : (meta.quemTemDireito ?? []),
+    documentos: Array.isArray(content?.documents) && content.documents.length
+      ? content.documents.filter((x): x is string => typeof x === "string") : (meta.documentos ?? []),
+    comoSolicitar: Array.isArray(content?.how_to_apply) && content.how_to_apply.length
+      ? content.how_to_apply as unknown as Benefit["comoSolicitar"] : (meta.comoSolicitar ?? []),
+    errosComuns: Array.isArray(extras.errosComuns) && extras.errosComuns.length ? extras.errosComuns : (meta.errosComuns ?? []),
+    dicas: Array.isArray(extras.dicas) && extras.dicas.length ? extras.dicas : (meta.dicas ?? []),
+    faq: Array.isArray(extras.faq) && extras.faq.length ? extras.faq : (meta.faq ?? []),
   };
 
   // Signed out is the default state: no guide is requested from the database.
@@ -112,7 +116,6 @@ function BenefitPage() {
     <PaymentPrompt open={paymentOpen} onOpenChange={setPaymentOpen} benefitName={meta.nome} />
   </div>;
   if (detail.isPending) return <div role="status" className="mx-auto max-w-3xl px-4 py-20 text-muted-foreground">Carregando orientações…</div>;
-  if (detail.isError || !content) return <div role="alert" className="mx-auto max-w-3xl px-4 py-20 text-destructive">Não foi possível carregar o conteúdo. Tente novamente ou procure o suporte.</div>;
   const category = getCategory(benefit.categoria);
   const Icon = category
     ? (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[category.icon] ?? Icons.Circle

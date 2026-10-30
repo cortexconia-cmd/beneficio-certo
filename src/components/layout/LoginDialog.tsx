@@ -44,7 +44,7 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (loading) return; if (!next) {
+    <Dialog open={open} onOpenChange={(next) => { if (!next) {
       // Closing the code screen abandons the sign-in: no session survives without a verified phone.
       if (mode === "verificar" && pendingUser) void logout().catch(() => {});
       setPassword(""); setError(""); setSuccess("");

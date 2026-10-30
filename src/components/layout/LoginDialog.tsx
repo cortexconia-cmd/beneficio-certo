@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -31,6 +31,8 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
   const [code, setCode] = useState("");
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState("");
+  // True only while finishing a brand-new account, so CompleteRegistration is not sent on every sign-in.
+  const signupFlow = useRef(false);
   const [success, setSuccess] = useState("");
   useEffect(() => { if (open) setMode(initialMode); }, [open, initialMode]);
   function changeMode(next: typeof mode) { setMode(next); setError(""); setSuccess(""); setPassword(""); }
@@ -64,11 +66,13 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
               else if (mode === "cadastrar") {
                 const confirm = await signup(name, whatsapp, email, password);
                 setPassword("");
+                signupFlow.current = confirm;
                 if (confirm) await requestCode("Enviamos um código de confirmação pelo WhatsApp.");
                 else { setMode("entrar"); setSuccess("Cadastro solicitado. Confirme seu e-mail pelo link recebido, depois entre para validar o WhatsApp."); }
               } else if (mode === "verificar") {
                 await verifyPhoneCode(whatsapp, code);
-                void trackEvent("Lead");
+                void trackEvent(signupFlow.current ? "CompleteRegistration" : "Lead");
+                signupFlow.current = false;
                 setSuccess("Celular confirmado. Sua conta está pronta.");
                 setCode("");
                 onOpenChange(false);

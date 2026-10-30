@@ -59,7 +59,7 @@ export async function initializeAnalytics(){
  if(marketing())await initPixel();
  await trackEvent("PageView");
 }
-export async function trackEvent(name:"PageView"|"ViewContent"|"registration_started"|"Lead"|"InitiateCheckout"){
+export async function trackEvent(name:"PageView"|"ViewContent"|"registration_started"|"Lead"|"CompleteRegistration"|"InitiateCheckout"){
  if(typeof window==="undefined"||!consent())return;
  if(!initialized){initialized=true;await send("visit");}
  const id=uuid();

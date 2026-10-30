@@ -20,7 +20,7 @@ Deno.serve(async req=>{
   const pixel=Deno.env.get("META_PIXEL_ID")??"";
   const {data:setting}=await db.from("platform_settings").select("value").eq("key","catalog_price_cents").maybeSingle();
   const amount=setting?.value;
-  return response(origin,{pixelId:p.consent_marketing===true&&/^\\d{10,20}$/.test(pixel)?pixel:null,
+  return response(origin,{pixelId:p.consent_marketing===true&&/^\d{10,20}$/.test(pixel)?pixel:null,
     priceCents:Number.isSafeInteger(amount)&&amount>=100&&amount<=100000?amount:2990});
  }
  if(!isUuid(p.visitor_id)||!isUuid(p.session_id))return response(origin,{error:"Identificadores inválidos"},400);
@@ -66,7 +66,7 @@ Deno.serve(async req=>{
  }
  if(kind==="event"){
   const eventName=str(p.event_name,80);
-  if(!eventName||!["PageView","ViewContent","registration_started","Lead","InitiateCheckout"].includes(eventName)||!isUuid(p.event_id))return response(origin,{error:"Evento inválido"},400);
+  if(!eventName||!["PageView","ViewContent","registration_started","Lead","CompleteRegistration","InitiateCheckout"].includes(eventName)||!isUuid(p.event_id))return response(origin,{error:"Evento inválido"},400);
   const {error}=await db.from("tracking_events").upsert({
    event_id:p.event_id,visitor_id:p.visitor_id,session_id:p.session_id,user_id:userId,
    event_name:eventName,page_path:str(p.path,250),properties:{source:"website"}
@@ -75,7 +75,7 @@ Deno.serve(async req=>{
   if(p.consent_marketing===true){
     const pixel=Deno.env.get("META_PIXEL_ID")??"";
     const token=Deno.env.get("META_CAPI_TOKEN");
-    if(eventName!=="registration_started"&&/^\\d{10,20}$/.test(pixel)&&token){
+    if(eventName!=="registration_started"&&/^\d{10,20}$/.test(pixel)&&token){
      const metaEvent=eventName;
      const metaBody={data:[{
        event_name:metaEvent,event_time:Math.floor(Date.now()/1000),event_id:p.event_id,

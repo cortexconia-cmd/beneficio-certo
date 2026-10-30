@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { trackEvent } from "@/components/ConsentTracking";
 import * as Icons from "lucide-react";
 import { ArrowLeft, Check, AlertTriangle, Lightbulb, FileText } from "lucide-react";
@@ -26,8 +26,7 @@ import { useLiveBenefits } from "@/hooks/use-live-benefits";
 export const Route = createFileRoute("/beneficios/$slug")({
   loader: ({ params }) => {
     const b = getBenefit(params.slug);
-    if (!b) throw notFound();
-    return { benefit: b };
+    return { benefit: b ?? null, slug: params.slug };
   },
   head: ({ loaderData }) => ({
     meta: loaderData
@@ -56,9 +55,12 @@ export const Route = createFileRoute("/beneficios/$slug")({
 });
 
 function BenefitPage() {
-  const { benefit: originalMeta } = Route.useLoaderData() as { benefit: Benefit };
-  const { benefits: liveBenefits } = useLiveBenefits();
-  const meta = liveBenefits.find(b => b.slug === originalMeta.slug) ?? originalMeta;
+  const { benefit: originalMeta, slug } = Route.useLoaderData() as { benefit: Benefit | null; slug: string };
+  const { benefits: liveBenefits, loading: benefitsLoading } = useLiveBenefits();
+  const meta: Benefit = liveBenefits.find(b => b.slug === slug) ?? originalMeta ?? {
+    id: slug, slug, nome: slug.replace(/-/g, " "), categoria: "complementares", descricaoCurta: "",
+    oQueE: "", quemTemDireito: [], documentos: [], comoSolicitar: [], errosComuns: [], dicas: [], faq: [],
+  };
   const { user, canOpen, checking } = useBenefitAccess();
   const locked = !canOpen(meta.slug);
   useEffect(() => { void trackEvent("ViewContent"); }, [meta.slug]);
@@ -99,6 +101,9 @@ function BenefitPage() {
     faq: Array.isArray(extras.faq) && extras.faq.length ? extras.faq : (meta.faq ?? []),
   };
 
+  // A newly published benefit may not exist in the original static catalog.
+  if (benefitsLoading && !originalMeta) return <div className="mx-auto max-w-3xl px-4 py-20">Carregando benefício…</div>;
+  if (!benefitsLoading && !liveBenefits.some(b => b.slug === slug)) return <div className="mx-auto max-w-3xl px-4 py-20 text-center">Benefício não encontrado. <Link to="/beneficios" className="text-primary underline">Ver catálogo</Link></div>;
   // Signed out is the default state: no guide is requested from the database.
   if (!checking && !user && !isFreeBenefit(meta.slug)) return <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
     <h1 className="text-3xl font-bold">{meta.nome}</h1>

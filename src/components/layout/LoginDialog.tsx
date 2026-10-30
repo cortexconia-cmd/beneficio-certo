@@ -34,10 +34,14 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
   // True only while finishing a brand-new account, so CompleteRegistration is not sent on every sign-in.
   const signupFlow = useRef(false);
   const [success, setSuccess] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const [awaitingEmail, setAwaitingEmail] = useState(false);
   useEffect(() => { if (open) setMode(initialMode); }, [open, initialMode]);
-  function changeMode(next: typeof mode) { setMode(next); setError(""); setSuccess(""); setPassword(""); }
+  function changeMode(next: typeof mode) { setAwaitingEmail(false); setMode(next); setError(""); setSuccess(""); setPassword(""); }
   // Opens the code screen and requests the code; a failure keeps the screen open with the real reason and "Reenviar".
   async function requestCode(announce: string) {
+    setAwaitingEmail(false);
     setMode("verificar");
     try { await sendPhoneCode(whatsapp); setSuccess(announce); }
     catch (e) { setError(e instanceof Error ? e.message : "Não foi possível enviar o código pelo WhatsApp."); }
@@ -59,7 +63,9 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            if (loading) return;
+            if (submittingRef.current) return;
+            submittingRef.current = true;
+            setSubmitting(true);
             setError(""); setSuccess("");
             try {
               if (mode === "entrar") { const verified = await login(email, password); setPassword(""); if (!verified) { setWhatsapp(pendingUser?.whatsapp || whatsapp); await requestCode("Enviamos um código de confirmação pelo WhatsApp."); } else onOpenChange(false); }
@@ -68,7 +74,7 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
                 setPassword("");
                 signupFlow.current = confirm;
                 if (confirm) await requestCode("Enviamos um código de confirmação pelo WhatsApp.");
-                else { setMode("entrar"); setSuccess("Cadastro solicitado. Confirme seu e-mail pelo link recebido, depois entre para validar o WhatsApp."); }
+                else { setAwaitingEmail(true); setSuccess("Sua conta foi criada. Confirme seu e-mail pelo link recebido e depois entre com os dados cadastrados para validar o WhatsApp. Não crie uma segunda conta."); }
               } else if (mode === "verificar") {
                 await verifyPhoneCode(whatsapp, code);
                 void trackEvent(signupFlow.current ? "CompleteRegistration" : "Lead");
@@ -78,12 +84,13 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
                 onOpenChange(false);
               } else { await resetPassword(email); setSuccess("Se houver uma conta para este e-mail, você receberá um link para redefinir a senha."); }
             } catch (failure) { setError(failure instanceof Error ? failure.message : "Tente novamente."); }
+            finally { submittingRef.current = false; setSubmitting(false); }
           }}
           className="space-y-4"
         >
           {mode === "cadastrar" && <><div className="space-y-2">
             <Label htmlFor="login-name">Nome completo</Label>
-            <Input id="login-name" required autoComplete="name" disabled={loading} value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome completo" />
+            <Input id="login-name" required autoComplete="name" disabled={submitting} value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome completo" />
           </div><div className="space-y-2">
             <Label htmlFor="login-whatsapp">WhatsApp com DDD</Label>
             <Input id="login-whatsapp" type="tel" required autoComplete="tel" disabled={loading} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="(11) 99999-9999" />
@@ -113,10 +120,11 @@ export function LoginDialog({ open, onOpenChange, initialMode = "entrar" }: Prop
             <div className="space-y-2"><Label htmlFor="sms-code">Código recebido no WhatsApp</Label><Input id="sms-code" required inputMode="numeric" autoComplete="one-time-code" maxLength={8} pattern="[0-9]{6,8}" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" /></div>
             <Button type="button" variant="outline" className="w-full" disabled={loading} onClick={async () => { setError(""); setSuccess(""); try { await sendPhoneCode(whatsapp); setSuccess("Novo código solicitado pelo WhatsApp."); } catch (e) { setError(e instanceof Error ? e.message : "Falha ao reenviar SMS."); } }}>Reenviar código pelo WhatsApp</Button>
           </>}
+          {awaitingEmail && <Button type="button" variant="outline" className="w-full" onClick={() => changeMode("entrar")}>Já confirmei meu e-mail — entrar</Button>}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           {success && <p role="status" className="text-sm text-primary">{success}</p>}
           <DialogFooter>
-            <Button type="submit" disabled={loading} className="w-full">{loading ? "Aguarde…" : mode === "entrar" ? "Entrar" : mode === "cadastrar" ? "Cadastrar" : mode === "verificar" ? "Confirmar código" : "Enviar link"}</Button>
+            <Button type="submit" disabled={submitting || awaitingEmail} className="w-full">{submitting ? "Aguarde…" : mode === "entrar" ? "Entrar" : mode === "cadastrar" ? "Cadastrar" : mode === "verificar" ? "Confirmar código" : "Enviar link"}</Button>
           </DialogFooter>
           <div className="flex flex-wrap justify-center gap-1">
             {mode !== "entrar" && <Button type="button" variant="link" disabled={loading} onClick={() => changeMode("entrar")}>Voltar para entrar</Button>}

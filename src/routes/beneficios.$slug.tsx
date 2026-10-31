@@ -106,22 +106,32 @@ function BenefitPage() {
   // A newly published benefit may not exist in the original static catalog.
   if (benefitsLoading && !originalMeta) return <div className="mx-auto max-w-3xl px-4 py-20">Carregando benefício…</div>;
   if (!benefitsLoading && !liveBenefits.some(b => b.slug === slug)) return <div className="mx-auto max-w-3xl px-4 py-20 text-center">Benefício não encontrado. <Link to="/beneficios" className="text-primary underline">Ver catálogo</Link></div>;
-  // Signed out is the default state: no guide is requested from the database.
-  if (!checkingAccess && !user && !freeGuide) return <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
-    <h1 className="text-3xl font-bold">{meta.nome}</h1>
-    <p className="text-muted-foreground">Entre ou crie sua conta para acessar este guia.</p>
-    <button className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground" onClick={() => setLoginOpen(true)}>Entrar ou criar conta</button>
-    <div><Link to="/beneficios" className="text-primary underline">Voltar ao catálogo</Link></div>
+  // The dialogs sit in the same place in every branch below. Inside a branch, the auth loading state that runs
+  // during sign-up would unmount them and wipe what the person typed.
+  const dialogs = <>
     <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
-  </div>;
-  if (checkingAccess || locked) return <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
-    <div className="mx-auto grid size-20 place-items-center rounded-2xl bg-primary-soft text-primary"><LockKeyhole className="size-10"/></div>
-    <h1 className="text-3xl font-bold">{meta.nome}</h1>
-    <p className="text-muted-foreground">{checkingAccess ? "Verificando o acesso…" : "Este guia faz parte do conteúdo exclusivo. Os benefícios do governo podem ser solicitados gratuitamente pelos canais oficiais."}</p>
-    {!checkingAccess && <button className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground" onClick={() => setPaymentOpen(true)}>{user ? "Desbloquear guia" : "Criar conta para desbloquear"}</button>}
-    <div><Link to="/beneficios" className="text-primary underline">Voltar ao catálogo</Link></div>
     <PaymentPrompt open={paymentOpen} onOpenChange={setPaymentOpen} benefitName={meta.nome} />
-  </div>;
+  </>;
+  // Signed out is the default state: no guide is requested from the database.
+  if (!checkingAccess && !user && !freeGuide) return <>
+    <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
+      <h1 className="text-3xl font-bold">{meta.nome}</h1>
+      <p className="text-muted-foreground">Entre ou crie sua conta para acessar este guia.</p>
+      <button className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground" onClick={() => setLoginOpen(true)}>Entrar ou criar conta</button>
+      <div><Link to="/beneficios" className="text-primary underline">Voltar ao catálogo</Link></div>
+    </div>
+    {dialogs}
+  </>;
+  if (checkingAccess || locked) return <>
+    <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-5">
+      <div className="mx-auto grid size-20 place-items-center rounded-2xl bg-primary-soft text-primary"><LockKeyhole className="size-10"/></div>
+      <h1 className="text-3xl font-bold">{meta.nome}</h1>
+      <p className="text-muted-foreground">{checkingAccess ? "Verificando o acesso…" : "Este guia faz parte do conteúdo exclusivo. Os benefícios do governo podem ser solicitados gratuitamente pelos canais oficiais."}</p>
+      {!checkingAccess && <button className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground" onClick={() => setPaymentOpen(true)}>{user ? "Desbloquear guia" : "Criar conta para desbloquear"}</button>}
+      <div><Link to="/beneficios" className="text-primary underline">Voltar ao catálogo</Link></div>
+    </div>
+    {dialogs}
+  </>;
   if (detail.isPending) return <div role="status" className="mx-auto max-w-3xl px-4 py-20 text-muted-foreground">Carregando orientações…</div>;
   const category = getCategory(benefit.categoria);
   const Icon = category

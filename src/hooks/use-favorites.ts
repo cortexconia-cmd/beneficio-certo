@@ -19,15 +19,19 @@ export function useFavorites() {
   });
   const favorites = userId ? query.data ?? [] : [];
 
+  // Throws when the change is not saved, so the caller can tell the person. A duplicate insert (the list was
+  // not loaded yet) means the benefit is already saved, so it is not an error.
   const toggle = useCallback(async (slug: string) => {
-    if (!userId) return false;
+    if (!userId) throw new Error("Entre na sua conta para favoritar.");
     const active = favorites.includes(slug);
     const result = active
       ? await supabase.from("user_favorites").delete().eq("user_id", userId).eq("benefit_slug", slug)
       : await supabase.from("user_favorites").insert({ user_id: userId, benefit_slug: slug });
-    if (result.error) return false;
+    if (result.error && !(!active && result.error.code === "23505")) {
+      console.error("Favorito não salvo:", result.error.message);
+      throw new Error("Não foi possível atualizar seus favoritos. Tente novamente.");
+    }
     await queryClient.invalidateQueries({ queryKey: ["favorites", userId] });
-    return true;
   }, [userId, favorites, queryClient]);
 
   const isFavorite = useCallback((slug: string) => favorites.includes(slug), [favorites]);

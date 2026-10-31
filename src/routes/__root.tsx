@@ -15,6 +15,7 @@ import { Footer } from "@/components/Footer";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ConsentTracking } from "@/components/ConsentTracking";
+import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -132,6 +133,7 @@ function RootComponent() {
         </div>
         <MobileBottomNav />
         <ConsentTracking />
+        <Toaster />
       </div>
       </AuthProvider>
     </QueryClientProvider>

@@ -1,4 +1,5 @@
 import { Heart } from "lucide-react";
+import { toast } from "sonner";
 import { useFavorites } from "@/hooks/use-favorites";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +25,9 @@ export function FavoriteButton({ slug, className, size = "md" }: Props) {
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        void toggle(slug);
+        toggle(slug).catch((failure: unknown) => {
+          toast.error(failure instanceof Error ? failure.message : "Não foi possível atualizar seus favoritos.");
+        });
       }}
       className={cn(
         "inline-flex items-center justify-center rounded-full bg-white/95 backdrop-blur transition-all hover:scale-110 active:scale-95 shadow-soft",

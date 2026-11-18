@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -53,11 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const version = useRef(0);
   const profileReady = useRef<Promise<void>>(Promise.resolve());
   const recovery = useRef(false);
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
 
   useEffect(() => {
     let alive = true;
-    const recoveryLink = new URLSearchParams(window.location.hash.slice(1));
-    const requestedRecovery = window.location.pathname === "/redefinir-senha" && recoveryLink.get("type") === "recovery" && !recoveryLink.has("error");
     const apply = (next: Session | null) => {
       const current = ++version.current;
       setSession(next);
@@ -84,9 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     };
     const subscription = supabase.auth.onAuthStateChange((event, next) => {
-      if (event === "PASSWORD_RECOVERY" && requestedRecovery && next) {
+      // The library only emits this event for a genuine recovery link. The link may land on any page
+      // (the Auth "Site URL" decides), so send the person to the reset form instead of just signing them in.
+      if (event === "PASSWORD_RECOVERY" && next) {
         recovery.current = true;
         setRecoveryReady(true);
+        if (window.location.pathname !== "/redefinir-senha") void navigateRef.current({ to: "/redefinir-senha", replace: true });
       }
       if (event === "SIGNED_OUT") {
         recovery.current = false;
